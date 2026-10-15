@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>Privacy Policy - SkyCast</title>
+  <meta name="description" content="SkyCast privacy policy covering location requests, third-party providers, local storage, and legal notices.">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark header">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><i class="fas fa-cloud-meatball me-2"></i>SkyCast</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="index.html">Home</a></li>
+          <li class="nav-item"><a class="nav-link active" href="privacy-policy.html">Privacy Policy</a></li>
+          <li class="nav-item"><a class="nav-link" href="THIRD_PARTY_LICENSES.md">Third-Party Licenses</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <section class="container my-5 text-white">
+    <div class="row justify-content-center">
+      <div class="col-md-10 weather-card p-5">
+        <h1 class="mb-4">Privacy Policy</h1>
+        <p>Last updated: September 23, 2026</p>
+
+        <h3>1. Information We Process</h3>
+        <p>SkyCast does not require an account or login. To provide weather, forecast and location-aware features, the application may process:</p>
+        <ul>
+          <li>City names or search terms you enter into the search box</li>
+          <li>Browser geolocation coordinates when you grant permission</li>
+          <li>Weather and geocoding requests sent to our server for proxying to public meteorological providers</li>
+          <li>Basic browser preferences stored locally, including the theme, units and favorite cities</li>
+        </ul>
+        <p>These values are used only to render weather data, power the experience, and improve the service.</p>
+
+        <h3>2. Local Storage and Browser Data</h3>
+        <p>SkyCast may store preferences in the browser using localStorage, such as your preferred temperature units, theme mode and saved favorite cities. This data remains on your device and is not transmitted to a backend account system unless you explicitly submit it in a request to the weather API.</p>
+
+        <h3>3. Third-Party Data Providers</h3>
+        <p>SkyCast may send requests to third-party weather and data providers such as Open-Meteo and GNews through our same-origin server. Open-Meteo supplies weather, geocoding and air-quality data. GNews is used to retrieve filtered English weather, environmental, climate and science headlines. The site may also load static assets and font libraries from providers such as Google Fonts, Bootstrap CDN, Leaflet, Chart.js and Font Awesome. These requests are subject to the providers' own privacy and terms of service.</p>
+
+        <h3>4. Cookies and Analytics</h3>
+        <p>SkyCast does not use advertising cookies or analytics by default. If a future deployment enables analytics, the configuration must be set explicitly in the environment variables and documented here before publishing. We do not sell personal data and we do not use your weather searches for marketing profiling.</p>
+
+        <h3>5. Security and Retention</h3>
+        <p>Weather requests are processed on a server-side proxy to keep API credentials out of the browser. Server logs are kept only as needed for operational reliability and abuse prevention. We do not retain sensitive billing or account data because SkyCast is not built around authenticated user accounts.</p>
+
+        <h3>6. Your Rights</h3>
+        <p>You may clear browser local storage at any time to remove saved preferences or favorite cities. If you are concerned about the data handled by a third-party provider, review the provider's privacy policy for that service.</p>
+
+        <h3>7. License and Legal Notices</h3>
+        <p>This project is open source under the MIT License. See <a href="LICENSE" class="text-info">LICENSE</a> for the full license text and <a href="THIRD_PARTY_LICENSES.md" class="text-info">THIRD_PARTY_LICENSES.md</a> for third-party component notices.</p>
+
+        <h3>8. Contact</h3>
+        <p>If you have questions about this policy, please reach out via the project repository or the contact details listed in the application documentation.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer text-white text-center">
+    <div class="container">
+      <p class="mb-0 opacity-75">&copy; 2026 SkyCast | Precision Weather Forecasting</p>
+      <p class="small mb-0">
+        <a href="LICENSE" class="text-decoration-none text-white-50">MIT License</a> |
+        <a href="THIRD_PARTY_LICENSES.md" class="text-decoration-none text-white-50">Third-Party Licenses</a>
+      </p>
+    </div>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

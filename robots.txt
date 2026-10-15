@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: __SKYCAST_SITE_URL__/sitemap.xml

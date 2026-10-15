@@ -1,0 +1,28 @@
+# Secrets - never commit
+.env
+.env.local
+.env.*
+!.env.example
+.env.*.local
+.dev.vars
+.dev.vars.*
+
+# Dependencies
+node_modules/
+
+# Build + runtime artefacts
+dist/
+.cache/
+.wrangler/
+*.log
+npm-debug.log*
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Local scratch
+.tmp/

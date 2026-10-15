@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<!--
+  SkyCast - Weather Application
+  (c) 2026 SkyCast. All rights reserved.
+  Unauthorized copying of this file, via any medium is strictly prohibited.
+  Proprietary and confidential.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="robots" content="index,follow" />
+  
+  <!-- Primary Meta Tags -->
+  <title>SkyCast – Real-Time Weather Forecast & Interactive Radar</title>
+  <meta name="title" content="SkyCast – Real-Time Weather Forecast & Interactive Radar">
+  <meta name="description" content="Get real-time weather updates, 7-day forecasts, air quality insights, and interactive weather maps with SkyCast." />
+  <meta name="skycast-api-base" content="" />
+  <meta name="keywords" content="weather, forecast, weather app, radar, temperature, humidity, SkyCast, real-time weather">
+  <meta name="author" content="Gajalakshmi">
+  <link rel="canonical" href="__SKYCAST_SITE_URL__/" />
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <!-- Performance Optimization: Preconnect -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net">
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com">
+  <link rel="preconnect" href="https://unpkg.com">
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="__SKYCAST_SITE_URL__/">
+  <meta property="og:title" content="SkyCast – Real-Time Weather Forecast & Interactive Radar">
+  <meta property="og:description" content="Get real-time weather updates, 7-day forecasts, air quality insights, and interactive weather maps with SkyCast.">
+  <meta property="og:image" content="__SKYCAST_SITE_URL__/assets/social-preview.svg">
+  <meta property="og:image:type" content="image/svg+xml">
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image">
+  <meta property="twitter:url" content="__SKYCAST_SITE_URL__/">
+  <meta property="twitter:title" content="SkyCast – Real-Time Weather Forecast & Interactive Radar">
+  <meta property="twitter:description" content="Get real-time weather updates, 7-day forecasts, air quality insights, and interactive weather maps with SkyCast.">
+  <meta property="twitter:image" content="__SKYCAST_SITE_URL__/assets/social-preview.svg">
+
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <!-- Animate.css -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="css/style.css?v=9" />
+
+  <!-- SEO: Structured Data -->
+  <script type="application/ld+json" id="weatherSchema"></script>
+</head>
+<body class="animate__animated animate__fadeIn">
+  <canvas id="weatherParticles" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;"></canvas>
+  <div class="app-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="appSidebar" aria-label="Main navigation">
+      <div class="sidebar-logo">
+        <i class="fas fa-cloud-meatball"></i>
+        <span>SkyCast</span>
+        <button class="sidebar-collapse" id="sidebarCollapse" type="button" onclick="toggleSidebar()" aria-label="Collapse sidebar" aria-expanded="true">
+          <i class="fas fa-angles-left"></i>
+        </button>
+      </div>
+      
+      <div class="nav-links">
+        <a href="#dashboard" class="nav-link active" data-page="dashboard" onclick="showPage('dashboard', event)" aria-current="page">
+          <i class="fas fa-th-large"></i>
+          <span>Dashboard</span>
+        </a>
+        <a href="#maps" class="nav-link" data-page="maps" onclick="showPage('maps', event)">
+          <i class="fas fa-earth-americas"></i>
+          <span>Weather Explorer</span>
+        </a>
+        <a href="#forecast" class="nav-link" data-page="forecast" onclick="showPage('forecast', event)">
+          <i class="fas fa-clock-rotate-left"></i>
+          <span>Forecast Studio</span>
+        </a>
+        <a href="#analytics" class="nav-link" data-page="analytics" onclick="showPage('analytics', event)">
+          <i class="fas fa-chart-area"></i>
+          <span>Atmospheric Analytics</span>
+        </a>
+        <a href="#comparison" class="nav-link" data-page="comparison" onclick="showPage('comparison', event)">
+          <i class="fas fa-city"></i>
+          <span>City Comparison</span>
+        </a>
+        <a href="#news" class="nav-link" data-page="news" onclick="showPage('news', event)">
+          <i class="fas fa-newspaper"></i>
+          <span>Weather News</span>
+        </a>
+        <a href="#notifications" class="nav-link" data-page="notifications" onclick="showPage('notifications', event)">
+          <i class="fas fa-bell"></i>
+          <span>Weather Alerts</span>
+        </a>
+        <a href="#saved" class="nav-link" data-page="saved" onclick="showPage('saved', event)">
+          <i class="fas fa-bookmark"></i>
+          <span>Saved Locations</span>
+        </a>
+        <a href="#air-quality" class="nav-link" data-page="air-quality" onclick="showPage('air-quality', event)">
+          <i class="fas fa-wind"></i>
+          <span>Air Quality</span>
+        </a>
+        <a href="#safety" class="nav-link" data-page="safety" onclick="showPage('safety', event)">
+          <i class="fas fa-shield-halved"></i>
+          <span>Safety Guide</span>
+        </a>
+        <a href="#settings" class="nav-link" data-page="settings" onclick="showPage('settings', event)">
+          <i class="fas fa-sliders"></i>
+          <span>Settings</span>
+        </a>
+        <a href="#about" class="nav-link" data-page="about" onclick="showPage('about', event)">
+          <i class="fas fa-info-circle"></i>
+          <span>About SkyCast</span>
+        </a>
+      </div>
+
+      <div class="sidebar-footer">
+        <p class="mb-0">&copy; 2026 SkyCast</p>
+        <button class="btn btn-sm btn-outline-light mt-2 rounded-pill" onclick="toggleTheme()" id="themeToggle">
+          <i class="fas fa-moon"></i>
+        </button>
+      </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+      <header class="app-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-light border-opacity-10">
+        <div class="header-left">
+          <div id="realTimeClock" class="small opacity-75"></div>
+          <form class="header-search" role="search" onsubmit="event.preventDefault(); getWeather(document.getElementById('globalCityInput').value)">
+            <i class="fas fa-search" aria-hidden="true"></i>
+            <input id="globalCityInput" type="search" aria-label="Search for a city" placeholder="Search a city..." list="globalCitySuggestions" autocomplete="off">
+            <datalist id="globalCitySuggestions"></datalist>
+            <button type="button" class="voice-search-button" onclick="startVoiceSearch()" aria-label="Search by voice" title="Search by voice"><i class="fas fa-microphone"></i></button>
+            <button type="submit" aria-label="Search city"><i class="fas fa-arrow-right"></i></button>
+          </form>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <span id="dataStatus" class="status-pill" aria-live="polite"><i class="fas fa-circle-notch fa-spin me-1"></i>Loading weather</span>
+          <span id="headerUpdated" class="header-updated">Awaiting update</span>
+          <button class="btn btn-sm btn-outline-light" type="button" onclick="refreshWeather()" aria-label="Refresh weather" title="Refresh weather">
+            <i class="fas fa-rotate-right"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-light" type="button" onclick="getLocation()" aria-label="Use my current location" title="Use my current location">
+            <i class="fas fa-location-crosshairs"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-light header-theme-toggle" type="button" onclick="toggleTheme()" id="headerThemeToggle" aria-label="Toggle color theme">
+            <i class="fas fa-moon"></i>
+          </button>
+          <button class="btn btn-sm btn-outline-light" onclick="toggleNotifications()" aria-label="Open notification center">
+            <i class="fas fa-bell"></i><span id="notificationCount" class="notification-count d-none">0</span>
+          </button>
+          <button class="btn btn-sm btn-outline-light" onclick="toggleUnits()" id="unitToggle" aria-label="Change temperature units">°C</button>
+        </div>
+      </header>
+
+      <div class="content-scroll">
+      <!-- Dashboard Page -->
+      <section id="dashboard-page" class="page-section">
+        <div id="favoritesSection" class="text-center mb-4" style="display:none;">
+          <h6 class="text-uppercase small letter-spacing-2 opacity-50 mb-3">Favorite Cities</h6>
+          <div id="favoritesList"></div>
+        </div>
+
+        <div id="weatherContainer" class="row justify-content-center">
+          <!-- Initial Search Prompt when empty -->
+          <div class="col-md-8 text-center py-5 opacity-50" id="searchPrompt">
+            <i class="fas fa-cloud-sun-bolt fa-4x mb-3"></i>
+            <h4>Enter a city to get started</h4>
+          </div>
+        </div>
+
+        <div id="visualsContainer" class="mt-4" style="display:none;">
+          <div class="weather-card">
+            <h5 class="mb-4"><i class="fas fa-chart-line me-2"></i>Temperature Trend</h5>
+            <canvas id="tempChart" height="150" role="img" aria-label="Seven-day temperature trend forecast chart"></canvas>
+          </div>
+        </div>
+
+        <div id="dashboardSection" class="mt-4" style="display:none;">
+          <div class="weather-card">
+            <h5 class="mb-4"><i class="fas fa-th me-2"></i>Multi-City Dashboard</h5>
+            <div id="dashboardGrid" class="row g-3"></div>
+          </div>
+        </div>
+
+        <div id="intelligenceSection" class="mt-4" style="display:none;">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+              <p class="section-kicker mb-1">Atmospheric intelligence</p>
+              <h4 class="mb-0">Live conditions</h4>
+            </div>
+            <span id="lastUpdated" class="small opacity-75">Awaiting data</span>
+          </div>
+          <div id="metricGrid" class="metric-grid"></div>
+        </div>
+        <div id="dailyInsight" class="weather-card daily-insight mt-4" style="display:none;" aria-live="polite"></div>
+
+        <div id="hourlyContainer" class="weather-card mt-4" style="display: none;">
+          <h5 class="mb-4"><i class="fas fa-clock me-2"></i>Hourly Forecast</h5>
+          <div class="d-flex overflow-auto pb-3 gap-4" id="hourlyList"></div>
+        </div>
+
+        <div id="forecastContainer" class="row justify-content-center mt-4"></div>
+        <div id="extendedForecast" class="mt-4" style="display:none;">
+          <div class="weather-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div><p class="section-kicker mb-1">Planning horizon</p><h4 class="mb-0">7-day outlook</h4></div>
+              <span class="small opacity-75">Open-Meteo daily model</span>
+            </div>
+            <div id="extendedForecastGrid" class="extended-forecast-grid"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="forecast-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Forecast studio · Open-Meteo</p>
+          <h2 class="mb-2"><i class="fas fa-clock-rotate-left me-2 text-accent"></i>Explore the forecast</h2>
+          <p class="mb-0">Step through the next 24 hourly forecast points. These are model forecasts, not historical observations.</p>
+        </div>
+        <div class="weather-card forecast-explorer">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <div><p class="section-kicker mb-1">Selected forecast hour</p><h3 id="forecastSelectionTitle" class="mb-1">Waiting for forecast</h3><p id="forecastSelectionSummary" class="mb-0 text-secondary">Search for a city to explore its hourly outlook.</p></div>
+            <div class="forecast-selection-value"><i id="forecastSelectionIcon" class="fas fa-cloud-sun"></i><strong id="forecastSelectionTemp">--</strong></div>
+          </div>
+          <div class="forecast-timeline-controls mt-4">
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="stepForecast(-1)" aria-label="Previous forecast hour"><i class="fas fa-backward-step"></i></button>
+            <button id="forecastPlayButton" class="btn btn-sm btn-outline-light" type="button" onclick="toggleForecastPlayback()" aria-label="Play forecast timeline"><i class="fas fa-play"></i></button>
+            <input id="forecastTimeline" type="range" min="0" max="23" value="0" step="1" aria-label="Choose forecast hour" oninput="selectForecastHour(this.value)" disabled>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="stepForecast(1)" aria-label="Next forecast hour"><i class="fas fa-forward-step"></i></button>
+          </div>
+          <div class="d-flex justify-content-between small text-secondary mt-2"><span>Now</span><span>+24 hours</span></div>
+          <div class="forecast-detail-strip mt-4" id="forecastDetailStrip"></div>
+          <p class="source-note mt-3 mb-0"><i class="fas fa-circle-info me-1"></i>Forecast values are provided by Open-Meteo. Weather-map playback is not offered because historical or forecast tile frames are not configured.</p>
+        </div>
+        <div class="weather-card mt-4">
+          <div class="d-flex justify-content-between align-items-center mb-3"><div><p class="section-kicker mb-1">Next 24 hours</p><h4 class="mb-0">Temperature & precipitation chance</h4></div><span class="data-attribution">Forecast · Open-Meteo</span></div>
+          <canvas id="forecastTimeChart" height="120" role="img" aria-label="Hourly temperature and precipitation forecast chart"></canvas>
+        </div>
+        <div id="forecastStudioDays" class="mt-4"></div>
+      </section>
+
+      <section id="analytics-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Atmospheric intelligence</p>
+          <h2 class="mb-2"><i class="fas fa-chart-area me-2 text-accent"></i>Forecast analytics</h2>
+          <p class="mb-0">Explore hourly temperature, precipitation probability, humidity, and wind from the selected location’s available forecast.</p>
+        </div>
+        <div class="analytics-toolbar weather-card">
+          <div><strong id="analyticsLocation">Waiting for location</strong><span id="analyticsRange" class="d-block small text-secondary">Up to 56 hourly forecast points · no historical observations</span></div>
+          <button class="btn btn-sm btn-outline-light" type="button" onclick="downloadForecastCsv()"><i class="fas fa-download me-2"></i>Download forecast CSV</button>
+        </div>
+        <div class="analytics-grid mt-4">
+          <article class="weather-card"><h4>Temperature</h4><p class="small text-secondary">Hourly forecast · <span data-temperature-unit>°C</span></p><canvas id="analyticsTemperatureChart" height="180" role="img" aria-label="Hourly temperature forecast chart"></canvas></article>
+          <article class="weather-card"><h4>Precipitation probability</h4><p class="small text-secondary">Forecast chance · percent</p><canvas id="analyticsPrecipitationChart" height="180" role="img" aria-label="Hourly precipitation probability forecast chart"></canvas></article>
+          <article class="weather-card"><h4>Humidity & dew point</h4><p class="small text-secondary">Forecast values · percent and <span data-temperature-unit>°C</span></p><canvas id="analyticsHumidityChart" height="180" role="img" aria-label="Hourly humidity and dew point forecast chart"></canvas></article>
+          <article class="weather-card"><h4>Wind speed</h4><p class="small text-secondary">Forecast speed · <span data-wind-unit>m/s</span></p><canvas id="analyticsWindChart" height="180" role="img" aria-label="Hourly wind speed forecast chart"></canvas></article>
+          <article class="weather-card"><h4>Surface pressure</h4><p class="small text-secondary">Forecast pressure · hPa</p><canvas id="analyticsPressureChart" height="180" role="img" aria-label="Hourly surface pressure forecast chart"></canvas></article>
+          <article class="weather-card"><h4>Wind direction profile</h4><p class="small text-secondary">Forecast wind speed grouped by compass sector</p><canvas id="analyticsWindRoseChart" height="180" role="img" aria-label="Average forecast wind speed by compass sector"></canvas></article>
+        </div>
+        <p class="source-note mt-3"><i class="fas fa-database me-1"></i>Source: Open-Meteo forecast data. Historical records, anomalies, and climatological baselines are not configured.</p>
+      </section>
+
+      <section id="comparison-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Saved locations · live conditions</p>
+          <h2 class="mb-2"><i class="fas fa-city me-2 text-accent"></i>City comparison</h2>
+          <p class="mb-0">Compare current conditions for saved locations using live weather data. Add locations by searching a city and selecting Save.</p>
+        </div>
+        <div class="weather-card">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3"><div><h4 class="mb-1">Saved city conditions</h4><p class="text-secondary mb-0">Each card loads current conditions independently.</p></div><button class="btn btn-sm btn-outline-light" type="button" onclick="renderComparison()"><i class="fas fa-rotate me-2"></i>Refresh comparison</button></div>
+          <div id="comparisonGrid" class="comparison-grid"><div class="empty-state"><i class="fas fa-city"></i><p>Save at least one city to compare current weather.</p></div></div>
+          <p class="source-note mt-3 mb-0">Values use the selected display units. City weather is supplied by the configured current-weather provider.</p>
+        </div>
+      </section>
+
+      <!-- Maps Page -->
+      <section id="maps-page" class="page-section" style="display:none;">
+        <div class="weather-card">
+          <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+            <div>
+              <h4 class="mb-1"><i class="fas fa-map-marked-alt me-2 text-accent"></i>Live weather map</h4>
+              <p class="opacity-75 mb-0">Explore global weather layers and local radar context.</p>
+            </div>
+            <button class="btn btn-sm btn-outline-light" onclick="toggleMapFullscreen()"><i class="fas fa-expand me-1"></i>Fullscreen</button>
+          </div>
+          <div class="map-toolbar mb-3" role="toolbar" aria-label="Map display modes">
+            <button class="map-mode active" data-map-mode="temperature" onclick="setMapMode('temperature', this)"><i class="fas fa-temperature-half"></i> Temperature</button>
+            <button class="map-mode" data-map-mode="rain" onclick="setMapMode('rain', this)"><i class="fas fa-cloud-rain"></i> Rain radar</button>
+            <button class="map-mode" data-map-mode="clouds" onclick="setMapMode('clouds', this)"><i class="fas fa-cloud"></i> Clouds</button>
+            <button class="map-mode" data-map-mode="humidity" onclick="setMapMode('humidity', this)"><i class="fas fa-droplet"></i> Humidity</button>
+            <button class="map-mode" data-map-mode="pressure" onclick="setMapMode('pressure', this)"><i class="fas fa-gauge-high"></i> Pressure</button>
+            <button class="map-mode" data-map-mode="wind" onclick="setMapMode('wind', this)"><i class="fas fa-wind"></i> Wind</button>
+            <button class="map-mode" data-map-mode="satellite" onclick="setMapMode('satellite', this)"><i class="fas fa-satellite"></i> Satellite</button>
+          </div>
+          <label class="map-opacity-control mb-3" for="mapOpacity"><span>Overlay opacity</span><input id="mapOpacity" type="range" min="10" max="100" value="60" oninput="setMapOpacity(this.value)" aria-label="Weather overlay opacity"><output id="mapOpacityValue">60%</output></label>
+          <div id="map" style="height: 600px; border-radius: 20px;"></div>
+          <div class="map-timeline mt-3">
+            <div class="d-flex justify-content-between small opacity-75"><span>Weather layer status</span><span id="radarTimestamp">Live layer</span></div>
+            <p class="small opacity-50 mb-0 mt-2">Weather overlays show the latest data available from the selected provider; historical playback is not available.</p>
+          </div>
+          <div class="map-meta mt-3"><span><i class="fas fa-palette me-1"></i>Legend: cooler / lower values → warmer / higher values</span><span><i class="fas fa-database me-1"></i>Basemap: OpenStreetMap · weather overlays require an enabled tile provider</span></div>
+        </div>
+      </section>
+
+      <section id="notifications-page" class="page-section" style="display:none;">
+        <div class="weather-card">
+          <div class="d-flex justify-content-between align-items-center mb-4">
+            <div><p class="section-kicker mb-1">Personal safety</p><h4 class="mb-0"><i class="fas fa-bell me-2 text-accent"></i>Notification center</h4></div>
+            <button class="btn btn-sm btn-outline-light" onclick="requestNotifications()">Enable browser notifications</button>
+          </div>
+          <div id="notificationList" class="empty-state"><i class="fas fa-shield-heart"></i><p class="mb-0">Search a location to receive weather-aware alerts.</p></div>
+        </div>
+      </section>
+
+      <!-- Air Quality Page -->
+      <section id="air-quality-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Environmental intelligence</p>
+          <h2 class="mb-2"><i class="fas fa-wind me-2 text-accent"></i>Air Quality</h2>
+          <p class="mb-0">Understand the air around your selected location with pollutant-level detail and practical health guidance.</p>
+        </div>
+        <div class="weather-card text-center">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="text-start"><span class="small opacity-75">Current observation</span><h4 class="mb-0">Air Quality Index</h4></div>
+            <span class="data-attribution">Open-Meteo Air Quality · <span id="aqiUpdated">Awaiting data</span></span>
+          </div>
+          <div id="aqiBadgePage" class="my-4"></div>
+          <div id="pollutantGrid" class="pollutant-grid"></div>
+          <div class="chart-panel mt-4"><div class="d-flex justify-content-between"><h6 class="mb-3">Pollutant profile</h6><span class="small opacity-75">Relative concentration</span></div><canvas id="aqiChart" height="110"></canvas></div>
+          <div id="aqiGuidance" class="guidance-panel mt-4 text-start"></div>
+          
+          <div class="row mt-5 g-4">
+            <div class="col-md-4">
+              <div class="p-3 border border-light border-opacity-10 rounded">
+                <small class="d-block opacity-75">Dew Point</small>
+                <h4 id="dewPointValue" class="mb-0">--</h4>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 border border-light border-opacity-10 rounded">
+                <small class="d-block opacity-75">Heat Index</small>
+                <h4 id="heatIndexValue" class="mb-0">--</h4>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="p-3 border border-light border-opacity-10 rounded">
+                <small class="d-block opacity-75">Wind Chill</small>
+                <h4 id="windChillValue" class="mb-0">--</h4>
+              </div>
+            </div>
+          </div>
+
+          <hr class="border-light opacity-10 my-5">
+          <div id="airQualityDetails" class="mt-4 text-start">
+            <!-- Details loaded from script -->
+          </div>
+        </div>
+      </section>
+
+      <!-- News Page -->
+      <section id="news-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Verified context</p>
+          <h2 class="mb-2"><i class="fas fa-newspaper me-2 text-accent"></i>Weather, Environment & Facts</h2>
+          <p class="mb-0">Explore weather science, environmental updates and useful facts about our atmosphere and planet.</p>
+        </div>
+        <div class="weather-card">
+          <div class="news-toolbar"><div class="news-search"><i class="fas fa-search"></i><input id="newsSearch" type="search" placeholder="Search verified stories" aria-label="Search live news"></div><div class="news-filters"><button class="news-filter active" type="button" data-news-category="all">All</button><button class="news-filter" type="button" data-news-category="weather">Weather</button><button class="news-filter" type="button" data-news-category="environment">Environment</button><button class="news-filter" type="button" data-news-category="climate">Climate</button><button class="news-filter" type="button" data-news-category="science">Science</button></div></div>
+          <div id="newsContainer" class="news-grid"></div>
+        </div>
+        <div class="weather-card">
+          <div class="page-intro mb-3"><p class="section-kicker mb-1">Weather science</p><h4 class="mb-1">Weather Insights & Facts</h4><p class="mb-0">Verified educational context for understanding the atmosphere.</p></div>
+          <div class="fact-grid">
+            <article class="fact-card"><i class="fas fa-bolt"></i><h5>Lightning heat</h5><p>Lightning rapidly heats surrounding air, causing expansion that produces thunder.</p><span>Source: NOAA National Severe Storms Laboratory</span></article>
+            <article class="fact-card"><i class="fas fa-cloud"></i><h5>Cloud weight</h5><p>Clouds contain many water droplets and ice particles, even though their density makes them appear light.</p><span>Source: USGS Water Science School</span></article>
+            <article class="fact-card"><i class="fas fa-cloud-rain"></i><h5>Rain smell</h5><p>The smell after rain is associated with compounds released by soil, plants and microorganisms.</p><span>Source: Royal Meteorological Society</span></article>
+          </div>
+        </div>
+      </section>
+
+      <!-- Safety Page -->
+      <section id="safety-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Preparedness centre</p>
+          <h2 class="mb-2"><i class="fas fa-shield-alt me-2 text-accent"></i>Safety & Preparedness Guide</h2>
+          <p class="mb-0">Practical, source-aware guidance for preparing before hazardous weather, staying safer during an event, and recovering afterward. Always follow local emergency-management instructions.</p>
+        </div>
+        <div class="weather-card">
+          <div class="d-flex justify-content-between align-items-center mb-3"><div><p class="section-kicker mb-1">Operational snapshot</p><h4 class="mb-0">Current Safety Conditions</h4></div><span id="safetyUpdated" class="small opacity-75">Data unavailable</span></div>
+          <div id="safetyConditions" class="safety-conditions empty-state"><i class="fas fa-location-crosshairs"></i><p class="mb-0">Search a location to load current conditions.</p></div>
+          <div class="source-note mt-3"><i class="fas fa-circle-info me-1"></i>Observations from Open-Meteo. This is not an official warning service.</div>
+        </div>
+        <div class="weather-card">
+          <div class="d-flex justify-content-between align-items-center mb-3"><h4 class="mb-0">Live Weather Alerts</h4><span class="data-attribution">Official alerts only</span></div>
+          <div id="safetyAlerts" class="empty-state"><i class="fas fa-check-circle"></i><p class="mb-1">No active alerts available.</p><small>SkyCast does not infer or invent official warnings.</small></div>
+        </div>
+        <div class="safety-grid" id="safetyCards"></div>
+        <div class="weather-card preparedness-card">
+          <div><p class="section-kicker mb-1">Ready before you need it</p><h4>Emergency preparedness kit</h4><p class="opacity-75">Store supplies where they are easy to reach and adapt them for your household, pets and medical needs.</p></div>
+          <div class="kit-grid"><div><i class="fas fa-box-open"></i><strong>Emergency kit</strong><span>Whistle, batteries and basic tools</span></div><div><i class="fas fa-bottle-water"></i><strong>Water</strong><span>Plan for several days</span></div><div><i class="fas fa-flashlight"></i><strong>Flashlight</strong><span>Keep spare batteries nearby</span></div><div><i class="fas fa-kit-medical"></i><strong>First aid</strong><span>Include regular medicines</span></div><div><i class="fas fa-battery-full"></i><strong>Power bank</strong><span>Charge before severe weather</span></div><div><i class="fas fa-file-shield"></i><strong>Documents</strong><span>Keep copies protected</span></div></div>
+          <div class="source-note mt-3"><i class="fas fa-book-open me-1"></i>Preparedness guidance: Ready.gov and national emergency-management agencies. Review local official guidance for your area.</div>
+        </div>
+      </section>
+
+      <section id="settings-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">Personalize your workspace</p>
+          <h2 class="mb-2"><i class="fas fa-sliders me-2 text-accent"></i>Settings</h2>
+          <p class="mb-0">Adjust display preferences for this browser. Your choices are saved locally on this device.</p>
+        </div>
+        <div class="weather-card settings-card">
+          <div class="settings-row">
+            <div><strong>Temperature units</strong><span>Choose Celsius or Fahrenheit throughout the forecast.</span></div>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="toggleUnits()">Switch to <span id="settingsUnitTarget">°F</span></button>
+          </div>
+          <div class="settings-row">
+            <div><strong>Color theme</strong><span>Choose a comfortable light or dark appearance.</span></div>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="toggleTheme()">Toggle theme</button>
+          </div>
+            <div class="settings-row">
+              <div><strong>Location privacy</strong><span>SkyCast uses the default city until you explicitly request your current location.</span></div>
+            <button class="btn btn-sm btn-outline-light" type="button" onclick="getLocation()">Use my location</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- About Page -->
+      <section id="about-page" class="page-section" style="display:none;">
+        <div class="page-intro">
+          <p class="section-kicker mb-1">SKYCAST</p>
+          <h2 class="mb-2">Weather. Earth. Intelligence.</h2>
+          <p class="mb-0">A modern platform for real-time weather, environmental intelligence, interactive maps, alerts and Earth observation.</p>
+        </div>
+        <div class="weather-card">
+          <h3 class="mb-3">About SkyCast</h3>
+          <p class="opacity-75">SkyCast brings weather observations, forecasts, environmental information and Earth data together in one clear experience. Our goal is to make complex atmospheric information easier to understand and more useful in everyday life.</p>
+          <div class="about-grid mt-4">
+            <article><h5>Our Mission</h5><p>Make weather and Earth data simple, accessible and actionable.</p></article>
+            <article><h5>Our Vision</h5><p>Create a trusted platform for exploring weather and changing environmental conditions.</p></article>
+          </div>
+        </div>
+        <div class="weather-card">
+          <h4 class="mb-3">What makes SkyCast different</h4>
+          <div class="feature-grid">
+            <span><i class="fas fa-cloud-sun"></i>Real-time weather and forecasts</span>
+            <span><i class="fas fa-map"></i>Interactive weather maps</span>
+            <span><i class="fas fa-wind"></i>Environmental monitoring</span>
+            <span><i class="fas fa-bell"></i>Location-aware alerts</span>
+            <span><i class="fas fa-earth-americas"></i>Earth observation</span>
+            <span><i class="fas fa-chart-line"></i>Clear data visualization</span>
+          </div>
+        </div>
+        <div class="weather-card">
+          <h4 class="mb-3">Data transparency</h4>
+          <p class="opacity-75 mb-2">SkyCast identifies the source, data type and update time for dynamic information wherever the provider makes those details available.</p>
+          <p class="source-note mb-0"><i class="fas fa-shield-halved me-1"></i>SkyCast does not create or alter official emergency warnings. Always verify important warnings with local authorities.</p>
+        </div>
+      </section>
+
+      <footer class="mt-5 pt-4 border-top border-light border-opacity-10 opacity-50 small text-center">
+        <p>&copy; 2026 SkyCast | Crafted by GAJALAKSHMI | <a href="privacy-policy.html" class="text-white text-decoration-none">Privacy Policy</a></p>
+        <p class="mb-0">Current weather by <a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" class="text-white text-decoration-none">OpenWeather</a>; forecasts and air-quality data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="text-white text-decoration-none">Open-Meteo</a>.</p>
+      </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/skycons/1396634940/skycons.min.js"></script>
+  <script src="js/script.js?v=11"></script>
+</body>
+</html>
