@@ -1,0 +1,246 @@
+
+> skycast@2.0.0 test
+> node --test tests/*.test.js --test-reporter=tap
+
+✔ Cloudflare API rejects unsupported methods and unknown endpoints (48.1864ms)
+✔ Cloudflare status reports configuration without exposing credentials (3.3738ms)
+✔ Cloudflare weather proxy keeps the OpenWeather key out of its response (3.3793ms)
+✔ Cloudflare GNews proxy keeps its key out of its response (4.0897ms)
+✔ Cloudflare geocoding proxy uses the provider and preserves the frontend response shape (3.784ms)
+✔ Cloudflare forecast, air-quality, and UV routes return the data shapes used by the frontend (11.4018ms)
+✔ Cloudflare NOAA alerts handle out-of-coverage locations without failing (2.1441ms)
+✔ Cloudflare map tile proxy keeps its configured key on the upstream request only (1.6935ms)
+✔ Cloudflare map tile proxy reports missing credentials without exposing keys (2.1795ms)
+✖ server responds with expected status and homepage (474.2219ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 9
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 612.7039
+
+✖ failing tests:
+
+test at tests\smoke.test.js:74:1
+✖ server responds with expected status and homepage (474.2219ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /OPENWEATHER_API_KEY|GNEWS_API_KEY|localhost:\d+|127\.0\.0\.1:\d+/. Input:
+  
+  '/**\n' +
+    ' * SkyCast - Weather Application\n' +
+    ' * (c) 2026 SkyCast. All rights reserved.\n' +
+    ' * Unauthorized copying of this file, via any medium is strictly prohibited.\n' +
+    ' * Proprietary and confidential.\n' +
+    ' */\n' +
+    `const configuredApiBase = document.querySelector('meta[name="skycast-api-base"]')?.content.trim().replace(/\\/+$/, "");\n` +
+    'const isDirectFileOpen = window.location.protocol === "file:" || window.location.hostname === "";\n' +
+    'const isLocalStaticServer = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)\n' +
+    '  && window.location.port\n' +
+    '  && window.location.port !== "3000";\n' +
+    'const localApiHost = window.location.hostname.includes(":")\n' +
+    '  ? `[${window.location.hostname}]`\n' +
+    '  : window.location.hostname;\n' +
+    'const apiBase = configuredApiBase || (isDirectFileOpen\n' +
+    '  ? "https://skycastio.netlify.app/api"\n' +
+    '  : isLocalStaticServer\n' +
+    '    ? `${window.location.protocol}//${localApiHost}:3000/api`\n' +
+    '    : "/api");\n' +
+    'let weatherChart = null;\n' +
+    'let forecastTimeChart = null;\n' +
+    'let analyticsCharts = [];\n' +
+    'let weatherMap = null;\n' +
+    'let mapMarker = null;\n' +
+    'let mapLayers = {};\n' +
+    'let mapMode = "temperature";\n' +
+    'let mapRefreshIntervals = {};\n' +
+    'let mapLayerProviderReady = false;\n' +
+    'let particleInterval = null;\n' +
+    'let particleResizeBound = false;\n' +
+    'let currentUnits = localStorage.getItem("units") || "metric";\n' +
+    'let notificationMessages = [];\n' +
+    'let latestWeatherData = null;\n' +
+    'let latestForecastData = null;\n' +
+    'let latestAqiHtml = "";\n' +
+    'let latestUvHtml = "";\n' +
+    'let aqiChart = null;\n' +
+    'let newsCategory = "all";\n' +
+    'let newsSearchTimer = null;\n' +
+    'let forecastPlaybackTimer = null;\n' +
+    'let alertRefreshInterval = null;\n' +
+    'let alertCoordinates = null;\n' +
+    'const notifiedAlertIds = new Set();\n' +
+    'const DEFAULT_CITY = "London";\n' +
+    'const skycons = new Skycons({"color": "#38bdf8", "resizeClear": true});\n' +
+    '\n' +
+    'function apiUrl(path, params = {}) {\n' +
+    '  const query = new URLSearchParams(params);\n' +
+    '  return `${apiBase}/${path}?${query}`;\n' +
+    '}\n' +
+    '\n' +
+    'function getSearchInput() {\n' +
+    '  return document.getElementById("globalCityInput");\n' +
+    '}\n' +
+    '\n' +
+    'async function fetchJson(url) {\n' +
+    '  try {\n' +
+    '    const response = await fetch(url);\n' +
+    '    const contentType = response.headers.get("content-type") || "";\n' +
+    '    if (!contentType.includes("json")) {\n' +
+    '      throw new Error("SkyCast service is temporarily unavailable.");\n' +
+    '    }\n' +
+    '    const data = await response.json();\n' +
+    '    if (!response.ok) throw new Error(data.message || "Weather data is temporarily unavailable.");\n' +
+    '    return data;\n' +
+    '  } catch (error) {\n' +
+    '    if (error instanceof TypeError || error.name === "AbortError") {\n' +
+    '      const message = isDirectFileOpen\n' +
+    '        ? "SkyCast was opened directly from disk. Start a local server with `npm run dev` and open http://localhost:3000 to load live weather data."\n' +
+    '        : isLocalStaticServer\n' +
+    '          ? "Weather service is unreachable. Start SkyCast with `npm run dev` on port 3000, then try again."\n' +
+    '          : "SkyCast service is temporarily unavailable. Please try again shortly.";\n' +
+    '      throw new Error(message);\n' +
+    '    }\n' +
+    '    throw error;\n' +
+    '  }\n' +
+    '}\n' +
+    '\n' +
+    'const safetyTopics = [\n' +
+    '  { title: "Thunderstorms", icon: "fa-cloud-bolt", summary: "Lightning, gusty winds and hail can develop quickly.", before: "Review local alerts and bring loose outdoor items inside.", during: "Go indoors, stay away from windows and avoid plumbing or corded devices.", after: "Wait for official all-clear guidance before going outside." },\n' +
+    '  { title: "Heatwaves", icon: "fa-sun", summary: "Extended heat can cause heat exhaustion and heat stroke.", before: "Plan cooling breaks, check on vulnerable people and keep water available.", during: "Stay cool and hydrated; never leave people or pets in parked vehicles.", after: "Continue monitoring symptoms and seek medical help for confusion or fainting." },\n' +
+    '  { title: "Heavy Rain", icon: "fa-cloud-showers-heavy", summary: "Intense rainfall can reduce visibility and make roads hazardous.", before: "Clear drains where safe and avoid unnecessary travel.", during: "Slow down, avoid driving through standing water and move indoors if conditions worsen.", after: "Watch for damaged roads, downed wires and contaminated water." },\n' +
+    '  { title: "Flooding", icon: "fa-house-flood-water", summary: "Floodwater can rise rapidly and hide dangerous debris or currents.", before: "Know higher ground and prepare a go-bag with essential medicines.", during: "Move to higher ground; never walk or drive through floodwater.", after: "Return only when officials say it is safe and avoid floodwater contact." },\n' +
+    '  { title: "Lightning", icon: "fa-bolt", summary: "Lightning can strike outside the area of heavy rain.", before: "Plan an indoor shelter and postpone exposed outdoor activities.", during: "If you hear thunder, go indoors and wait 30 minutes after the last thunder.", after: "Give first aid only when the scene is safe and call emergency services." },\n' +
+    '  { title: "Cyclones", icon: "fa-hurricane", summary: "Tropical systems can bring destructive wind, rain and storm surge.", before: "Follow evacuation guidance and secure windows, doors and outdoor items.", during: "Shelter in a small interior room away from windows and do not go outside in the eye.", after: "Avoid downed lines, damaged structures and floodwater." },\n' +
+    '  { title: "Wildfires", icon: "fa-fire", summary: "Smoke can travel far and fire conditions can change rapidly.", before: "Know evacuation routes and prepare masks, medicines and pet supplies.", during: "Follow evacuation orders and keep windows closed when smoke is present.", after: "Return only after officials approve it and watch for hot spots." },\n' +
+    '  { title: "Extreme Cold", icon: "fa-snowflake", summary: "Cold exposure and ice can threaten health, travel and utilities.", before: "Insulate exposed pipes, charge devices and check heating equipment.", during: "Stay warm and dry; limit travel and check on neighbors who need help.", after: "Avoid downed lines and report utility damage through official channels." }\n' +
+    '];\n' +
+    '\n' +
+    'function showPage(pageId, event) {\n' +
+    '  event?.preventDefault();\n' +
+    '  const targetPageId = pageId === "saved" ? "dashboard" : pageId;\n' +
+    '  if (pageId !== "forecast" && forecastPlaybackTimer) toggleForecastPlayback();\n' +
+    '\n' +
+    '  // Hide all sections\n' +
+    "  document.querySelectorAll('.page-section').forEach(section => {\n" +
+    "    section.style.display = 'none';\n" +
+    '  });\n' +
+    '  \n' +
+    '  // Show selected section\n' +
+    '  const target = document.getElementById(`${targetPageId}-page`);\n' +
+    '  if (target) {\n' +
+    "    target.style.display = 'block';\n" +
+    "    target.classList.add('animate__animated', 'animate__fadeIn');\n" +
+    '  }\n' +
+    '\n' +
+    '  // Update nav links\n' +
+    "  document.querySelectorAll('.nav-link').forEach(link => {\n" +
+    '    const active = link.dataset.page === pageId;\n' +
+    '    link.classList.toggle("active", active);\n' +
+    '    if (active) link.setAttribute("aria-current", "page");\n' +
+    '    else link.removeAttribute("aria-current");\n' +
+    '  });\n' +
+    '\n' +
+    '  // Special handling for map when switching to maps page\n' +
+    "  if (targetPageId === 'maps' && weatherMap) {\n" +
+    '    setTimeout(() => {\n' +
+    '      weatherMap.invalidateSize();\n' +
+    '    }, 100);\n' +
+    "  } else if (targetPageId === 'maps' && !weatherMap) {\n" +
+    '    const mapContainer = document.getElementById("map");\n' +
+    '    if (mapContainer) {\n' +
+    `      mapContainer.innerHTML = '<div class="map-empty-state"><i class="fas fa-map-location-dot"></i><strong>Search a location to explore the map</strong><span>The OpenStreetMap basemap and configured weather overlays will appear here.</span></div>';\n` +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  if (pageId === "comparison") renderComparison();\n' +
+    '  if (pageId === "analytics") renderForecastAnalytics();\n' +
+    '  if (pageId === "forecast") renderForecastStudio();\n' +
+    '\n' +
+    '  if (pageId === "saved") {\n' +
+    '    const section = document.getElementById("favoritesSection");\n' +
+    '    if (section) section.style.display = "block";\n' +
+    '    if (section?.offsetParent) {\n' +
+    '      section.scrollIntoView({ behavior: "smooth", block: "start" });\n' +
+    '      return;\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  const content = document.querySelector(".content-scroll");\n' +
+    '  if (content) content.scrollTo({ top: 0, behavior: "smooth" });\n' +
+    '}\n' +
+    '\n' +
+    'function toggleSidebar() {\n' +
+    '  const collapsed = document.body.classList.toggle("sidebar-collapsed");\n' +
+    '  const button = document.getElementById("sidebarCollapse");\n' +
+    '  if (!button) return;\n' +
+    '  button.setAttribute("aria-expanded", String(!collapsed));\n' +
+    '  button.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");\n' +
+    '  button.innerHTML = `<i class="fas fa-angles-${collapsed ? "right" : "left"}"></i>`;\n' +
+    '}\n' +
+    '\n' +
+    'document.addEventListener("DOMContentLoaded", () => {\n' +
+    '  renderSafetyCards();\n' +
+    '  setupNews();\n' +
+    '  updateClock();\n' +
+    '  setInterval(updateClock, 1000);\n' +
+    '  document.getElementById("unitToggle").textContent = currentUnits === "metric" ? "°C" : "°F";\n' +
+    '  updateUnitSettingsLabel();\n' +
+    '  registerServiceWorker();\n' +
+    '  \n' +
+    '  // Weather and official alerts refresh on separate provider cadences.\n' +
+    '  setInterval(() => {\n' +
+    '    const city = getSearchInput().value.trim();\n' +
+    '    if (city) getWeather(city);\n' +
+    '  }, 600000);\n' +
+    '\n' +
+    '  const urlParams = new URLSearchParams(window.location.search);\n' +
+    '  const city = urlParams.get("city");\n' +
+    '  if (city) {\n' +
+    '    getSearchInput().value = city;\n' +
+    '    getWeather(city);\n' +
+    '  } else if (urlParams.has("lat") && urlParams.has("lon")) {\n' +
+    '    getWeatherByCoords(urlParams.get("lat"), urlParams.get("lon"));\n' +
+    '  } else {\n' +
+    '    getSearchInput().value = DEFAULT_CITY;\n' +
+    '    getWeather(DEFAULT_CITY);\n' +
+    '  }\n' +
+    '  displayFavorites();\n' +
+    '\n' +
+    '  // City suggestions with debounce\n' +
+    '  let debounceTimer;\n' +
+    '  getSearchInput().addEventListener("input", (event) => {\n' +
+    '    clearTimeout(debounceTimer);\n' +
+    '    const query = event.target.value.trim();\n' +
+    '    if (query.length < 3) return;\n' +
+    '\n' +
+    '    debounceTimer = setTimeout(async () => {\n' +
+    '      try {\n' +
+    '        const data = await fetchJson(apiUrl("geocode", { q: query, limit: 5 }));\n' +
+    '        const datalist = document.getElementById("globalCitySuggestions");\n' +
+    '        if (datalist) datalist.innerHTML = data.map(item => `<option value="${escapeHtml(item.name)}${item.state ? `, ${escapeHtml(item.state)}` : ""}, ${escapeHtml(item.country)}">`).join("");\n' +
+    '      } catch (error) {\n' +
+    '        console.warn("City suggestions unavailable:", error.message);\n' +
+    '      }\n' +
+    '    }, 350);\n' +
+    '  });\n' +
+    '});\n' +
+    '\n' +
+    'function updateClock() {\n' +
+    '  const clockElement = document.getElementById("realTimeClock");\n' +
+    '  if (clockElement) {\n' +
+    '    const'... 77288 more characters
+  
+      at file:///E:/project/SkyCast/tests/smoke.test.js:118:12
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async withServer (file:///E:/project/SkyCast/tests/smoke.test.js:67:5)
+      at async TestContext.<anonymous> (file:///E:/project/SkyCast/tests/smoke.test.js:75:3)
+      at async Test.run (node:internal/test_runner/test:1332:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:385:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '/**\n * SkyCast - Weather Application\n * (c) 2026 SkyCast. All rights reserved.\n * Unauthorized copying of this file, via any medium is strictly prohibited.\n * Proprietary and confidential.\n */\nconst configuredApiBase = document.querySelector(\'meta[name="skycast-api-base"]\')?.content.trim().replace(/\\/+$/, "");\nconst isDirectFileOpen = window.location.protocol === "file:" || window.location.hostname === "";\nconst isLocalStaticServer = ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname)\n  && window.location.port\n  && window.location.port !== "3000";\nconst localApiHost = window.location.hostname.includes(":")\n  ? `[${window.location.hostname}]`\n  : window.location.hostname;\nconst apiBase = configuredApiBase || (isDirectFileOpen\n  ? "https://skycastio.netlify.app/api"\n  : isLocalStaticServer\n    ? `${window.location.protocol}//${localApiHost}:3000/api`\n    : "/api");\nlet weatherChart = null;\nlet forecastTimeChart = null;\nlet analyticsCharts = [];\nlet weatherMap = null;\nlet mapMarker = null;\nlet mapLayers = {};\nlet mapMode = "temperature";\nlet mapRefreshIntervals = {};\nlet mapLayerProviderReady = false;\nlet particleInterval = null;\nlet particleResizeBound = false;\nlet currentUnits = localStorage.getItem("units") || "metric";\nlet notificationMessages = [];\nlet latestWeatherData = null;\nlet latestForecastData = null;\nlet latestAqiHtml = "";\nlet latestUvHtml = "";\nlet aqiChart = null;\nlet newsCategory = "all";\nlet newsSearchTimer = null;\nlet forecastPlaybackTimer = null;\nlet alertRefreshInterval = null;\nlet alertCoordinates = null;\nconst notifiedAlertIds = new Set();\nconst DEFAULT_CITY = "London";\nconst skycons = new Skycons({"color": "#38bdf8", "resizeClear": true});\n\nfunction apiUrl(path, params = {}) {\n  const query = new URLSearchParams(params);\n  return `${apiBase}/${path}?${query}`;\n}\n\nfunction getSearchInput() {\n  return document.getElementById("globalCityInput");\n}\n\nasync function fetchJson(url) {\n  try {\n    const response = await fetch(url);\n    const contentType = response.headers.get("content-type") || "";\n    if (!contentType.includes("json")) {\n      throw new Error("SkyCast service is temporarily unavailable.");\n    }\n    const data = await response.json();\n    if (!response.ok) throw new Error(data.message || "Weather data is temporarily unavailable.");\n    return data;\n  } catch (error) {\n    if (error instanceof TypeError || error.name === "AbortError") {\n      const message = isDirectFileOpen\n        ? "SkyCast was opened directly from disk. Start a local server with `npm run dev` and open http://localhost:3000 to load live weather data."\n        : isLocalStaticServer\n          ? "Weather service is unreachable. Start SkyCast with `npm run dev` on port 3000, then try again."\n          : "SkyCast service is temporarily unavailable. Please try again shortly.";\n      throw new Error(message);\n    }\n    throw error;\n  }\n}\n\nconst safetyTopics = [\n  { title: "Thunderstorms", icon: "fa-cloud-bolt", summary: "Lightning, gusty winds and hail can develop quickly.", before: "Review local alerts and bring loose outdoor items inside.", during: "Go indoors, stay away from windows and avoid plumbing or corded devices.", after: "Wait for official all-clear guidance before going outside." },\n  { title: "Heatwaves", icon: "fa-sun", summary: "Extended heat can cause heat exhaustion and heat stroke.", before: "Plan cooling breaks, check on vulnerable people and keep water available.", during: "Stay cool and hydrated; never leave people or pets in parked vehicles.", after: "Continue monitoring symptoms and seek medical help for confusion or fainting." },\n  { title: "Heavy Rain", icon: "fa-cloud-showers-heavy", summary: "Intense rainfall can reduce visibility and make roads hazardous.", before: "Clear drains where safe and avoid unnecessary travel.", during: "Slow down, avoid driving through standing water and move indoors if conditions worsen.", after: "Watch for damaged roads, downed wires and contaminated water." },\n  { title: "Flooding", icon: "fa-house-flood-water", summary: "Floodwater can rise rapidly and hide dangerous debris or currents.", before: "Know higher ground and prepare a go-bag with essential medicines.", during: "Move to higher ground; never walk or drive through floodwater.", after: "Return only when officials say it is safe and avoid floodwater contact." },\n  { title: "Lightning", icon: "fa-bolt", summary: "Lightning can strike outside the area of heavy rain.", before: "Plan an indoor shelter and postpone exposed outdoor activities.", during: "If you hear thunder, go indoors and wait 30 minutes after the last thunder.", after: "Give first aid only when the scene is safe and call emergency services." },\n  { title: "Cyclones", icon: "fa-hurricane", summary: "Tropical systems can bring destructive wind, rain and storm surge.", before: "Follow evacuation guidance and secure windows, doors and outdoor items.", during: "Shelter in a small interior room away from windows and do not go outside in the eye.", after: "Avoid downed lines, damaged structures and floodwater." },\n  { title: "Wildfires", icon: "fa-fire", summary: "Smoke can travel far and fire conditions can change rapidly.", before: "Know evacuation routes and prepare masks, medicines and pet supplies.", during: "Follow evacuation orders and keep windows closed when smoke is present.", after: "Return only after officials approve it and watch for hot spots." },\n  { title: "Extreme Cold", icon: "fa-snowflake", summary: "Cold exposure and ice can threaten health, travel and utilities.", before: "Insulate exposed pipes, charge devices and check heating equipment.", during: "Stay warm and dry; limit travel and check on neighbors who need help.", after: "Avoid downed lines and report utility damage through official channels." }\n];\n\nfunction showPage(pageId, event) {\n  event?.preventDefault();\n  const targetPageId = pageId === "saved" ? "dashboard" : pageId;\n  if (pageId !== "forecast" && forecastPlaybackTimer) toggleForecastPlayback();\n\n  // Hide all sections\n  document.querySelectorAll(\'.page-section\').forEach(section => {\n    section.style.display = \'none\';\n  });\n  \n  // Show selected section\n  const target = document.getElementById(`${targetPageId}-page`);\n  if (target) {\n    target.style.display = \'block\';\n    target.classList.add(\'animate__animated\', \'animate__fadeIn\');\n  }\n\n  // Update nav links\n  document.querySelectorAll(\'.nav-link\').forEach(link => {\n    const active = link.dataset.page === pageId;\n    link.classList.toggle("active", active);\n    if (active) link.setAttribute("aria-current", "page");\n    else link.removeAttribute("aria-current");\n  });\n\n  // Special handling for map when switching to maps page\n  if (targetPageId === \'maps\' && weatherMap) {\n    setTimeout(() => {\n      weatherMap.invalidateSize();\n    }, 100);\n  } else if (targetPageId === \'maps\' && !weatherMap) {\n    const mapContainer = document.getElementById("map");\n    if (mapContainer) {\n      mapContainer.innerHTML = \'<div class="map-empty-state"><i class="fas fa-map-location-dot"></i><strong>Search a location to explore the map</strong><span>The OpenStreetMap basemap and configured weather overlays will appear here.</span></div>\';\n    }\n  }\n\n  if (pageId === "comparison") renderComparison();\n  if (pageId === "analytics") renderForecastAnalytics();\n  if (pageId === "forecast") renderForecastStudio();\n\n  if (pageId === "saved") {\n    const section = document.getElementById("favoritesSection");\n    if (section) section.style.display = "block";\n    if (section?.offsetParent) {\n      section.scrollIntoView({ behavior: "smooth", block: "start" });\n      return;\n    }\n  }\n\n  const content = document.querySelector(".content-scroll");\n  if (content) content.scrollTo({ top: 0, behavior: "smooth" });\n}\n\nfunction toggleSidebar() {\n  const collapsed = document.body.classList.toggle("sidebar-collapsed");\n  const button = document.getElementById("sidebarCollapse");\n  if (!button) return;\n  button.setAttribute("aria-expanded", String(!collapsed));\n  button.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");\n  button.innerHTML = `<i class="fas fa-angles-${collapsed ? "right" : "left"}"></i>`;\n}\n\ndocument.addEventListener("DOMContentLoaded", () => {\n  renderSafetyCards();\n  setupNews();\n  updateClock();\n  setInterval(updateClock, 1000);\n  document.getElementById("unitToggle").textContent = currentUnits === "metric" ? "°C" : "°F";\n  updateUnitSettingsLabel();\n  registerServiceWorker();\n  \n  // Weather and official alerts refresh on separate provider cadences.\n  setInterval(() => {\n    const city = getSearchInput().value.trim();\n    if (city) getWeather(city);\n  }, 600000);\n\n  const urlParams = new URLSearchParams(window.location.search);\n  const city = urlParams.get("city");\n  if (city) {\n    getSearchInput().value = city;\n    getWeather(city);\n  } else if (urlParams.has("lat") && urlParams.has("lon")) {\n    getWeatherByCoords(urlParams.get("lat"), urlParams.get("lon"));\n  } else {\n    getSearchInput().value = DEFAULT_CITY;\n    getWeather(DEFAULT_CITY);\n  }\n  displayFavorites();\n\n  // City suggestions with debounce\n  let debounceTimer;\n  getSearchInput().addEventListener("input", (event) => {\n    clearTimeout(debounceTimer);\n    const query = event.target.value.trim();\n    if (query.length < 3) return;\n\n    debounceTimer = setTimeout(async () => {\n      try {\n        const data = await fetchJson(apiUrl("geocode", { q: query, limit: 5 }));\n        const datalist = document.getElementById("globalCitySuggestions");\n        if (datalist) datalist.innerHTML = data.map(item => `<option value="${escapeHtml(item.name)}${item.state ? `, ${escapeHtml(item.state)}` : ""}, ${escapeHtml(item.country)}">`).join("");\n      } catch (error) {\n        console.warn("City suggestions unavailable:", error.message);\n      }\n    }, 350);\n  });\n});\n\nfunction updateClock() {\n  const clockElement = document.getElementById("realTimeClock");\n  if (clockElement) {\n    const'... 77288 more characters,
+    expected: /OPENWEATHER_API_KEY|GNEWS_API_KEY|localhost:\d+|127\.0\.0\.1:\d+/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
