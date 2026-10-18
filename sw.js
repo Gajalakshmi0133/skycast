@@ -1,9 +1,10 @@
-const CACHE_NAME = "skycast-shell-v11";
+const CACHE_NAME = "skycast-shell-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./css/style.css",
   "./js/script.js",
+  "./js/core/weather-map.js",
   "./assets/favicon.svg",
   "./manifest.webmanifest"
 ];

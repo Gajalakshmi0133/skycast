@@ -38,15 +38,26 @@ export function parseEnvFile(raw) {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
 
     let value = withoutExport.slice(separatorIndex + 1).trim();
+    let inSingle = false;
+    let inDouble = false;
+    for (let index = 0; index < value.length; index += 1) {
+      const char = value[index];
+      if (char === "'" && !inDouble) {
+        inSingle = !inSingle;
+      } else if (char === '"' && !inSingle) {
+        inDouble = !inDouble;
+      } else if (!inSingle && !inDouble && char === "#" && (index === 0 || /\s/.test(value[index - 1]))) {
+        value = value.slice(0, index).trim();
+        break;
+      }
+    }
+
     const isQuoted =
       (value.startsWith('"') && value.endsWith('"') && value.length > 1) ||
       (value.startsWith("'") && value.endsWith("'") && value.length > 1);
 
     if (isQuoted) {
       value = value.slice(1, -1);
-    } else {
-      const commentIndex = value.indexOf(" #");
-      if (commentIndex !== -1) value = value.slice(0, commentIndex).trim();
     }
 
     result[key] = value;
@@ -109,6 +120,7 @@ export const config = {
   keys: {
     map: text("MAP_API_KEY"),
     openWeather: text("OPENWEATHER_API_KEY"),
+    openMeteo: text("OPEN_METEO_API_KEY"),
     news: text("GNEWS_API_KEY"),
     satellite: text("SATELLITE_API_KEY"),
     firms: text("FIRMS_MAP_KEY"),

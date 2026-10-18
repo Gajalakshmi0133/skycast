@@ -64,8 +64,8 @@ export function apiStatus(env = {}) {
     provider: "openweathermap",
     configured: Boolean(env.OPENWEATHER_API_KEY),
     apiKeyRequired: true,
-    mapTilesEnabled: Boolean(env.OPENWEATHER_API_KEY),
-    radarEnabled: true,
+    mapWeatherDataConfigured: Boolean(env.OPEN_METEO_API_KEY),
+    radarEnabled: String(env.RAINVIEWER_COMMERCIAL_LICENSE_CONFIRMED || "").toLowerCase() === "true",
     weatherAlertsConfigured: true,
     newsConfigured: Boolean(env.GNEWS_API_KEY)
   };

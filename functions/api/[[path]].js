@@ -1,4 +1,5 @@
 import { createHttpClient } from "../../js/core/http.js";
+import { collectAlertsForLocation, fetchImdDistrictWarnings } from "../../server/alert-system.js";
 
 const weatherCodes = (code) => {
   if (code === 0) return ["Clear sky", "01d"];
@@ -43,15 +44,16 @@ function createClient(env) {
   });
 }
 
-function makeOpenMeteo(client) {
+function makeOpenMeteo(client, env = {}, commercial = false) {
   return async (path, params) => {
     const host = path === "/v1/search" ? "https://geocoding-api.open-meteo.com"
       : path === "/v1/air-quality" ? "https://air-quality-api.open-meteo.com"
-        : "https://api.open-meteo.com";
+        : (commercial || env.OPEN_METEO_API_KEY) ? "https://customer-api.open-meteo.com" : "https://api.open-meteo.com";
     const url = new URL(`${host}${path}`);
     for (const [key, value] of Object.entries(params)) {
       if (value !== null && value !== undefined && value !== "") url.searchParams.set(key, value);
     }
+    if (commercial || env.OPEN_METEO_API_KEY) url.searchParams.set("apikey", env.OPEN_METEO_API_KEY);
     return client.json(url.toString());
   };
 }
@@ -246,56 +248,124 @@ async function alertsFromNws(params, client) {
   return { alerts, provider: "NOAA/NWS", fetchedAt: new Date().toISOString() };
 }
 
-const humidityTileCache = new Map();
-const tileLayers = new Set(["temp_new", "precipitation_new", "clouds_new", "humidity_new", "pressure_new", "wind_new"]);
+const weatherMapCache = new Map();
+let radarMetadataCache = null;
 
-async function mapTile(layer, zoom, x, y, env, client, openMeteo) {
+function mapGrid(boundsValue) {
+  const bounds = String(boundsValue || "").split(",").map(Number);
+  if (bounds.length !== 4 || !bounds.every(Number.isFinite)) {
+    throw Object.assign(new Error("Map bounds must be west,south,east,north."), { status: 400 });
+  }
+  const [west, south, east, north] = bounds;
+  if (west < -180 || west > 180 || east < -180 || east > 180 || south < -85 || north > 85 || south >= north) {
+    throw Object.assign(new Error("Map bounds are outside supported coordinates."), { status: 400 });
+  }
+  let longitudeSpan = east - west;
+  if (longitudeSpan <= 0) longitudeSpan += 360;
+  if (longitudeSpan > 360) longitudeSpan = 360;
+  const points = [];
+  for (let row = 0; row < 5; row += 1) {
+    const latitude = north - ((north - south) * row) / 4;
+    for (let column = 0; column < 7; column += 1) {
+      const rawLongitude = west + (longitudeSpan * column) / 6;
+      const longitude = ((rawLongitude + 180) % 360 + 360) % 360 - 180;
+      points.push({ latitude, longitude });
+    }
+  }
+  return points;
+}
+
+async function mapWeatherData(params, env, client) {
+  if (!env.OPEN_METEO_API_KEY) {
+    return json({
+      cod: 503,
+      message: "Weather map data requires an Open-Meteo customer API key for this ad-supported deployment."
+    }, 503);
+  }
+  const points = mapGrid(params.bounds);
+  const key = points.map(point => `${point.latitude.toFixed(2)},${point.longitude.toFixed(2)}`).join("|");
+  const cached = weatherMapCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return json(cached.value, 200, { "cache-control": "public, max-age=300, stale-while-revalidate=600" });
+  }
+  const openMeteo = makeOpenMeteo(client, env, true);
+  const data = await openMeteo("/v1/forecast", {
+    latitude: points.map(point => point.latitude.toFixed(3)).join(","),
+    longitude: points.map(point => point.longitude.toFixed(3)).join(","),
+    current: "temperature_2m,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation",
+    wind_speed_unit: "kmh",
+    timezone: "UTC"
+  });
+  const locations = Array.isArray(data) ? data : [data];
+  const values = points.map((point, index) => {
+    const current = locations[index]?.current;
+    if (!current) return null;
+    return {
+      lat: point.latitude,
+      lon: point.longitude,
+      time: current.time || null,
+      temperature: finiteNumber(current.temperature_2m),
+      humidity: finiteNumber(current.relative_humidity_2m),
+      pressure: finiteNumber(current.surface_pressure),
+      windSpeed: finiteNumber(current.wind_speed_10m),
+      windDirection: finiteNumber(current.wind_direction_10m),
+      clouds: finiteNumber(current.cloud_cover),
+      precipitation: finiteNumber(current.precipitation)
+    };
+  }).filter(point => point && [
+    point.temperature, point.humidity, point.pressure, point.windSpeed,
+    point.windDirection, point.clouds, point.precipitation
+  ].some(Number.isFinite));
+  if (!values.length) throw new Error("Weather map data is empty.");
+  const value = {
+    points: values,
+    provider: "Open-Meteo",
+    dataType: "weather-model analysis",
+    updatedAt: new Date().toISOString(),
+    modelTime: locations[0]?.current?.time || null
+  };
+  weatherMapCache.set(key, { value, expiresAt: Date.now() + 300_000 });
+  if (weatherMapCache.size > 100) weatherMapCache.delete(weatherMapCache.keys().next().value);
+  return json(value, 200, { "cache-control": "public, max-age=300, stale-while-revalidate=600" });
+}
+
+const radarLicenseConfirmed = env => String(env.RAINVIEWER_COMMERCIAL_LICENSE_CONFIRMED || "").toLowerCase() === "true";
+
+async function radarMetadata(env, client) {
+  if (!radarLicenseConfirmed(env)) {
+    return json({ cod: 503, message: "RainViewer radar is disabled: its free API terms do not permit ad-supported commercial use. Obtain commercial permission before enabling it." }, 503);
+  }
+  if (radarMetadataCache && radarMetadataCache.expiresAt > Date.now()) {
+    return json(radarMetadataCache.value, 200, { "cache-control": "public, max-age=60" });
+  }
+  const metadata = await client.json("https://api.rainviewer.com/public/weather-maps.json");
+  const host = String(metadata.host || "");
+  const generated = finiteNumber(metadata.generated);
+  if (host !== "https://tilecache.rainviewer.com" || !Number.isInteger(generated) || generated > Date.now() / 1000 + 60) {
+    throw new Error("RainViewer returned invalid radar metadata.");
+  }
+  const frames = (metadata.radar?.past || []).filter(frame =>
+    Number.isInteger(Number(frame.time)) && Number(frame.time) <= Date.now() / 1000
+      && /^\/v2\/radar\/[A-Za-z0-9_-]+$/.test(String(frame.path || "")))
+    .map(frame => ({ time: Number(frame.time), path: frame.path }));
+  const value = { host, generated, frames, provider: "RainViewer" };
+  radarMetadataCache = { value, expiresAt: Date.now() + 60_000 };
+  return json(value, 200, { "cache-control": "public, max-age=60" });
+}
+
+async function radarCoverageTile(zoom, x, y, env, client) {
+  if (!radarLicenseConfirmed(env)) {
+    return json({ cod: 503, message: "RainViewer radar is disabled pending commercial permission." }, 503);
+  }
   const z = Number(zoom);
   const tileX = Number(x);
   const tileY = Number(y);
-  if (![z, tileX, tileY].every(Number.isInteger) || z < 0 || z > 18 || tileX < 0 || tileY < 0) {
-    return json({ cod: 400, message: "Invalid map tile." }, 400);
+  const scale = 2 ** z;
+  if (![z, tileX, tileY].every(Number.isInteger) || z < 0 || z > 7 || tileX < 0 || tileX >= scale || tileY < 0 || tileY >= scale) {
+    return json({ cod: 400, message: "Invalid RainViewer coverage tile." }, 400);
   }
-  if (!tileLayers.has(layer)) return json({ cod: 404, message: "Map layer is unavailable." }, 404);
-  if (!env.OPENWEATHER_API_KEY) {
-    return json({ cod: 503, message: "Weather map provider is not configured." }, 503);
-  }
-
-  if (layer === "humidity_new") {
-    const key = `${z}/${tileX}/${tileY}`;
-    const cached = humidityTileCache.get(key);
-    let svg = cached?.expiresAt > Date.now() ? cached.svg : null;
-    if (!svg) {
-      const scale = 2 ** z;
-      const longitude = (tileX / scale) * 360 - 180;
-      const mercator = Math.PI * (1 - (2 * tileY) / scale);
-      const latitude = (180 / Math.PI) * Math.atan(Math.sinh(mercator));
-      const data = await openMeteo("/v1/forecast", {
-        latitude,
-        longitude,
-        current: "relative_humidity_2m",
-        timezone: "UTC"
-      });
-      const value = finiteNumber(data.current?.relative_humidity_2m);
-      if (value === null) throw new Error("Humidity data is unavailable.");
-      const hue = Math.max(205, 55 - (value * 1.5));
-      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="hsl(${hue} 78% 48%)" fill-opacity=".48"/></svg>`;
-      humidityTileCache.set(key, { svg, expiresAt: Date.now() + 600_000 });
-      if (humidityTileCache.size > 500) humidityTileCache.delete(humidityTileCache.keys().next().value);
-    }
-    return new Response(svg, {
-      headers: { "content-type": "image/svg+xml", "cache-control": "public, max-age=600" }
-    });
-  }
-
-  const upstream = `https://tile.openweathermap.org/map/${layer}/${z}/${tileX}/${tileY}.png?appid=${encodeURIComponent(env.OPENWEATHER_API_KEY)}`;
-  const image = await client.binary(upstream);
-  return new Response(image, {
-    headers: {
-      "content-type": "image/png",
-      "cache-control": layer === "precipitation_new" ? "public, max-age=300" : "public, max-age=600"
-    }
-  });
+  const image = await client.binary(`https://tilecache.rainviewer.com/v2/coverage/0/256/${z}/${tileX}/${tileY}/0/0_0.png`);
+  return new Response(image, { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
 }
 
 function errorResponse(error, endpoint) {
@@ -319,7 +389,7 @@ export async function onRequest({ request, env = {} }) {
   const pathname = new URL(request.url).pathname;
   const params = Object.fromEntries(new URL(request.url).searchParams);
   const client = createClient(env);
-  const openMeteo = makeOpenMeteo(client);
+  const openMeteo = makeOpenMeteo(client, env);
 
   try {
     if (pathname === "/api/forecast") return json(await forecastFromOpenMeteo(params, openMeteo));
@@ -342,7 +412,15 @@ export async function onRequest({ request, env = {} }) {
     if (pathname === "/api/uv") return json({ value: (await currentFromOpenMeteo(params, openMeteo)).uv_index });
     if (pathname === "/api/alerts") {
       try {
-        return json(await alertsFromNws(params, client));
+        const nws = await alertsFromNws(params, client);
+        const imd = await fetchImdDistrictWarnings(client, Number(params.lat), Number(params.lon));
+        const merged = await collectAlertsForLocation({
+          lat: Number(params.lat),
+          lon: Number(params.lon),
+          fetchNws: async () => (nws.alerts || []).map(alert => ({ ...alert, provider: "NOAA/NWS" })),
+          fetchImd: async () => imd
+        });
+        return json({ alerts: merged.alerts, provider: merged.alerts.length ? (merged.provider || "Official alert providers") : (nws.provider || "NOAA/NWS"), fetchedAt: merged.fetchedAt, meta: merged.meta });
       } catch (error) {
         if (error.status === 400) throw error;
         console.error(`NOAA/NWS alerts request failed (status ${error.status || error.kind || "upstream"}).`);
@@ -350,15 +428,10 @@ export async function onRequest({ request, env = {} }) {
       }
     }
 
-    const tile = pathname.match(/^\/api\/map\/([^/]+)\/(\d+)\/(\d+)\/(\d+)\.png$/);
-    if (tile) {
-      try {
-        return await mapTile(tile[1], tile[2], tile[3], tile[4], env, client, openMeteo);
-      } catch (error) {
-        console.error(`Map tile request failed (status ${error.status || error.kind || "upstream"}).`);
-        return json({ cod: 503, message: "This map layer is temporarily unavailable." }, 503);
-      }
-    }
+    if (pathname === "/api/map-data") return await mapWeatherData(params, env, client);
+    if (pathname === "/api/radar/metadata") return await radarMetadata(env, client);
+    const coverage = pathname.match(/^\/api\/radar\/coverage\/(\d+)\/(\d+)\/(\d+)\.png$/);
+    if (coverage) return await radarCoverageTile(coverage[1], coverage[2], coverage[3], env, client);
     return json({ cod: 404, message: "API endpoint not found." }, 404);
   } catch (error) {
     return errorResponse(error, pathname.split("/").filter(Boolean).at(-1) || "api");

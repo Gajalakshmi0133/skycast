@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const appVersion = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version;
 const required = [
   'index.html',
+  '404.html',
   'privacy-policy.html',
   'THIRD_PARTY_LICENSES.md',
   'LICENSE',
@@ -55,6 +57,7 @@ const output = join(root, 'dist');
 mkdirSync(output, { recursive: true });
 for (const file of [
   'index.html',
+  '404.html',
   'privacy-policy.html',
   'manifest.webmanifest',
   'sw.js',
@@ -71,9 +74,11 @@ for (const directory of ['assets', 'css', 'js']) {
   cpSync(join(root, directory), join(output, directory), { recursive: true });
 }
 
-for (const file of ['index.html', 'robots.txt', 'sitemap.xml']) {
+for (const file of ['index.html', '404.html', 'robots.txt', 'sitemap.xml']) {
   const path = join(output, file);
-  const contents = readFileSync(path, 'utf8').replaceAll('__SKYCAST_SITE_URL__', siteUrl);
+  const contents = readFileSync(path, 'utf8')
+    .replaceAll('__SKYCAST_SITE_URL__', siteUrl)
+    .replaceAll('__SKYCAST_VERSION__', appVersion);
   if (contents.includes('__SKYCAST_SITE_URL__')) {
     console.error(`Build validation failed: unresolved site URL in ${file}.`);
     process.exit(1);
@@ -83,6 +88,7 @@ for (const file of ['index.html', 'robots.txt', 'sitemap.xml']) {
 
 const secretNames = [
   'OPENWEATHER_API_KEY',
+  'OPEN_METEO_API_KEY',
   'GNEWS_API_KEY',
   'MAP_API_KEY',
   'SATELLITE_API_KEY',

@@ -17,6 +17,7 @@
   <meta name="title" content="SkyCast – Real-Time Weather Forecast & Interactive Radar">
   <meta name="description" content="Get real-time weather updates, 7-day forecasts, air quality insights, and interactive weather maps with SkyCast." />
   <meta name="skycast-api-base" content="" />
+  <meta name="skycast-version" content="__SKYCAST_VERSION__" />
   <meta name="keywords" content="weather, forecast, weather app, radar, temperature, humidity, SkyCast, real-time weather">
   <meta name="author" content="Gajalakshmi">
   <link rel="canonical" href="__SKYCAST_SITE_URL__/" />
@@ -57,7 +58,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   
   <!-- Custom CSS -->
-  <link rel="stylesheet" href="css/style.css?v=9" />
+  <link rel="stylesheet" href="css/style.css?v=11" />
 
   <!-- SEO: Structured Data -->
   <script type="application/ld+json" id="weatherSchema"></script>
@@ -69,12 +70,12 @@
   <canvas id="weatherParticles" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1;"></canvas>
   <div class="app-container">
     <!-- Sidebar Navigation -->
-    <nav class="sidebar" id="appSidebar" aria-label="Main navigation">
+    <nav class="sidebar" id="appSidebar" aria-label="Main navigation" aria-hidden="false">
       <div class="sidebar-logo">
         <i class="fas fa-cloud-meatball"></i>
         <span>SkyCast</span>
         <button class="sidebar-collapse" id="sidebarCollapse" type="button" onclick="toggleSidebar()" aria-label="Collapse sidebar" aria-expanded="true">
-          <i class="fas fa-angles-left"></i>
+          <i class="fas fa-chevron-left"></i>
         </button>
       </div>
       
@@ -141,6 +142,9 @@
     <main class="main-content">
       <header class="app-header d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-light border-opacity-10">
         <div class="header-left">
+          <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-label="Open navigation" aria-controls="appSidebar" aria-expanded="false" onclick="toggleMobileNav()">
+            <i class="fas fa-bars" aria-hidden="true"></i>
+          </button>
           <div id="realTimeClock" class="small opacity-75"></div>
           <form class="header-search" role="search" onsubmit="event.preventDefault(); getWeather(document.getElementById('globalCityInput').value)">
             <i class="fas fa-search" aria-hidden="true"></i>
@@ -177,7 +181,7 @@
           <div id="favoritesList"></div>
         </div>
 
-        <div id="weatherContainer" class="row justify-content-center">
+        <div id="weatherContainer" class="row justify-content-center" aria-live="polite">
           <!-- Initial Search Prompt when empty -->
           <div class="col-md-8 text-center py-5 opacity-50" id="searchPrompt">
             <i class="fas fa-cloud-sun-bolt fa-4x mb-3"></i>
@@ -300,22 +304,42 @@
             </div>
             <button class="btn btn-sm btn-outline-light" onclick="toggleMapFullscreen()"><i class="fas fa-expand me-1"></i>Fullscreen</button>
           </div>
-          <div class="map-toolbar mb-3" role="toolbar" aria-label="Map display modes">
-            <button class="map-mode active" data-map-mode="temperature" onclick="setMapMode('temperature', this)"><i class="fas fa-temperature-half"></i> Temperature</button>
-            <button class="map-mode" data-map-mode="rain" onclick="setMapMode('rain', this)"><i class="fas fa-cloud-rain"></i> Rain radar</button>
-            <button class="map-mode" data-map-mode="clouds" onclick="setMapMode('clouds', this)"><i class="fas fa-cloud"></i> Clouds</button>
-            <button class="map-mode" data-map-mode="humidity" onclick="setMapMode('humidity', this)"><i class="fas fa-droplet"></i> Humidity</button>
-            <button class="map-mode" data-map-mode="pressure" onclick="setMapMode('pressure', this)"><i class="fas fa-gauge-high"></i> Pressure</button>
-            <button class="map-mode" data-map-mode="wind" onclick="setMapMode('wind', this)"><i class="fas fa-wind"></i> Wind</button>
-            <button class="map-mode" data-map-mode="satellite" onclick="setMapMode('satellite', this)"><i class="fas fa-satellite"></i> Satellite</button>
+          <div class="map-control-row mb-3">
+            <div class="map-toolbar" role="toolbar" aria-label="Weather layers">
+              <button class="map-mode active" data-map-mode="temperature" onclick="setMapMode('temperature', this)" aria-pressed="true"><i class="fas fa-temperature-half"></i> Temperature</button>
+              <button class="map-mode" data-map-mode="rain" onclick="setMapMode('rain', this)" aria-pressed="false" disabled title="Commercial radar license required"><i class="fas fa-cloud-rain"></i> Rain radar</button>
+              <button class="map-mode" data-map-mode="precipitation" onclick="setMapMode('precipitation', this)" aria-pressed="false"><i class="fas fa-cloud-showers-heavy"></i> Precipitation estimate</button>
+              <button class="map-mode" data-map-mode="clouds" onclick="setMapMode('clouds', this)" aria-pressed="false"><i class="fas fa-cloud"></i> Clouds</button>
+              <button class="map-mode" data-map-mode="humidity" onclick="setMapMode('humidity', this)" aria-pressed="false"><i class="fas fa-droplet"></i> Humidity</button>
+              <button class="map-mode" data-map-mode="pressure" onclick="setMapMode('pressure', this)" aria-pressed="false"><i class="fas fa-gauge-high"></i> Pressure</button>
+              <button class="map-mode" data-map-mode="wind" onclick="setMapMode('wind', this)" aria-pressed="false"><i class="fas fa-wind"></i> Wind</button>
+              <button class="map-mode" data-map-mode="satellite" onclick="setMapMode('satellite', this)" aria-pressed="false"><i class="fas fa-satellite"></i> Satellite</button>
+            </div>
+            <label class="map-basemap-control" for="mapBasemap">Basemap
+              <select id="mapBasemap" onchange="setMapBasemap(this.value)" aria-label="Select basemap">
+                <option value="street">Street</option>
+                <option value="terrain">Terrain</option>
+                <option value="satellite">Satellite</option>
+              </select>
+            </label>
           </div>
           <label class="map-opacity-control mb-3" for="mapOpacity"><span>Overlay opacity</span><input id="mapOpacity" type="range" min="10" max="100" value="60" oninput="setMapOpacity(this.value)" aria-label="Weather overlay opacity"><output id="mapOpacityValue">60%</output></label>
           <div id="map" style="height: 600px; border-radius: 20px;"></div>
-          <div class="map-timeline mt-3">
-            <div class="d-flex justify-content-between small opacity-75"><span>Weather layer status</span><span id="radarTimestamp">Live layer</span></div>
-            <p class="small opacity-50 mb-0 mt-2">Weather overlays show the latest data available from the selected provider; historical playback is not available.</p>
+          <div class="map-timeline mt-3" aria-label="Radar animation timeline">
+            <div class="radar-timeline-head"><strong id="radarTimestamp">Map data will appear after selecting a location</strong><span id="mapLastUpdated">Not updated</span></div>
+            <div class="radar-timeline-controls">
+              <button id="radarPrevious" class="btn btn-sm btn-outline-light" type="button" onclick="stepRadarFrame(-1)" aria-label="Previous radar frame" disabled><i class="fas fa-backward-step"></i></button>
+              <button id="radarPlay" class="btn btn-sm btn-outline-light" type="button" onclick="toggleRadarPlayback()" aria-label="Play radar animation" disabled><i class="fas fa-play"></i></button>
+              <button id="radarNext" class="btn btn-sm btn-outline-light" type="button" onclick="stepRadarFrame(1)" aria-label="Next radar frame" disabled><i class="fas fa-forward-step"></i></button>
+              <input id="radarFrameSlider" type="range" min="0" max="0" value="0" oninput="selectRadarFrame(this.value)" aria-label="Radar frame" disabled>
+              <label for="radarSpeed">Speed</label>
+              <select id="radarSpeed" onchange="setRadarPlaybackSpeed(this.value)" aria-label="Radar playback speed">
+                <option value="1000">1×</option><option value="600" selected>1.7×</option><option value="300">3.3×</option>
+              </select>
+            </div>
+            <p id="mapSourceNote" class="small opacity-75 mb-0 mt-2">Weather fields are model estimates, not observations. Observed radar is disabled: RainViewer's free API is not licensed for this ad-supported site. Use Precipitation estimate for modeled rainfall, or configure a commercially licensed radar feed with confirmed regional coverage.</p>
           </div>
-          <div class="map-meta mt-3"><span><i class="fas fa-palette me-1"></i>Legend: cooler / lower values → warmer / higher values</span><span><i class="fas fa-database me-1"></i>Basemap: OpenStreetMap · weather overlays require an enabled tile provider</span></div>
+          <div class="map-meta mt-3"><span><i class="fas fa-palette me-1"></i><span id="mapLegendCaption">Legend updates with the selected weather layer.</span></span><span><i class="fas fa-database me-1"></i>Street © OpenStreetMap · Weather data © <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> · Satellite © <a href="https://earthdata.nasa.gov/gibs" target="_blank" rel="noopener noreferrer">NASA GIBS</a></span></div>
         </div>
       </section>
 
@@ -446,47 +470,60 @@
         <div class="page-intro">
           <p class="section-kicker mb-1">SKYCAST</p>
           <h2 class="mb-2">Weather. Earth. Intelligence.</h2>
-          <p class="mb-0">A modern platform for real-time weather, environmental intelligence, interactive maps, alerts and Earth observation.</p>
+          <p class="mb-0">A weather dashboard for exploring provider-supplied current conditions, model forecasts, air quality and map layers.</p>
         </div>
         <div class="weather-card">
           <h3 class="mb-3">About SkyCast</h3>
-          <p class="opacity-75">SkyCast brings weather observations, forecasts, environmental information and Earth data together in one clear experience. Our goal is to make complex atmospheric information easier to understand and more useful in everyday life.</p>
+          <p class="opacity-75">SkyCast brings current weather, forecast models and environmental information together in one browser-based experience. The application does not create weather observations or official warnings; it presents data from the providers listed below.</p>
           <div class="about-grid mt-4">
-            <article><h5>Our Mission</h5><p>Make weather and Earth data simple, accessible and actionable.</p></article>
-            <article><h5>Our Vision</h5><p>Create a trusted platform for exploring weather and changing environmental conditions.</p></article>
+            <article><h5>Application</h5><p>SkyCast · version <span data-app-version>Loading…</span></p></article>
+            <article><h5>Developer</h5><p>Gajalakshmi</p></article>
+            <article><h5>Release date</h5><p>Not published in the project configuration.</p></article>
+            <article><h5>Feedback</h5><p><a href="https://github.com/Gajalakshmi0133/skycast/issues" target="_blank" rel="noopener noreferrer">Contact the developer or report an issue on GitHub</a>.</p></article>
           </div>
         </div>
         <div class="weather-card">
-          <h4 class="mb-3">What makes SkyCast different</h4>
+          <h4 class="mb-3">Available features</h4>
           <div class="feature-grid">
-            <span><i class="fas fa-cloud-sun"></i>Real-time weather and forecasts</span>
-            <span><i class="fas fa-map"></i>Interactive weather maps</span>
-            <span><i class="fas fa-wind"></i>Environmental monitoring</span>
-            <span><i class="fas fa-bell"></i>Location-aware alerts</span>
-            <span><i class="fas fa-earth-americas"></i>Earth observation</span>
-            <span><i class="fas fa-chart-line"></i>Clear data visualization</span>
+            <span><i class="fas fa-cloud-sun"></i>Current conditions and city search</span>
+            <span><i class="fas fa-calendar-days"></i>Hourly and seven-day forecasts</span>
+            <span><i class="fas fa-map"></i>Model-based weather layers and satellite imagery</span>
+            <span><i class="fas fa-wind"></i>Air quality and UV information</span>
+            <span><i class="fas fa-bell"></i>NOAA/NWS alerts where available</span>
+            <span><i class="fas fa-chart-line"></i>Forecast charts, comparison and CSV export</span>
+            <span><i class="fas fa-bookmark"></i>Saved locations and local display preferences</span>
+            <span><i class="fas fa-newspaper"></i>Optional live news when configured</span>
           </div>
         </div>
         <div class="weather-card">
-          <h4 class="mb-3">Data transparency</h4>
-          <p class="opacity-75 mb-2">SkyCast identifies the source, data type and update time for dynamic information wherever the provider makes those details available.</p>
+          <h4 class="mb-3">What's available in this release</h4>
+          <p class="opacity-75 mb-2">Version <span data-app-version>Loading…</span> includes the features listed above. A dated release history is not maintained in the project configuration.</p>
           <p class="source-note mb-0"><i class="fas fa-shield-halved me-1"></i>SkyCast does not create or alter official emergency warnings. Always verify important warnings with local authorities.</p>
         </div>
       </section>
 
-      <footer class="mt-5 pt-4 border-top border-light border-opacity-10 opacity-50 small text-center">
-        <p>&copy; 2026 SkyCast | Crafted by GAJALAKSHMI | <a href="privacy-policy.html" class="text-white text-decoration-none">Privacy Policy</a></p>
-        <p class="mb-0">Current weather by <a href="https://openweathermap.org/" target="_blank" rel="noopener noreferrer" class="text-white text-decoration-none">OpenWeather</a>; forecasts and air-quality data by <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer" class="text-white text-decoration-none">Open-Meteo</a>.</p>
+      <section id="not-found-page" class="page-section" style="display:none;">
+        <div class="weather-card error-state" role="status">
+          <i class="fas fa-map-signs" aria-hidden="true"></i>
+          <h2>Page not found</h2>
+          <p>The SkyCast page you requested is not available.</p>
+          <a class="btn btn-outline-light" href="#dashboard" onclick="showPage('dashboard', event)">Return to Dashboard</a>
+        </div>
+      </section>
+
+      <footer class="app-footer mt-5 pt-4 border-top border-light border-opacity-10 small text-center">
+        <p>&copy; 2026 SkyCast | Crafted by Gajalakshmi | Version <span data-app-version>Loading…</span> | <a href="index.html#about" class="text-white text-decoration-none">About</a> | <a href="privacy-policy.html" class="text-white text-decoration-none">Privacy Policy</a> | <a href="THIRD_PARTY_LICENSES.md" class="text-white text-decoration-none">Third-party licenses</a></p>
       </footer>
       </div>
     </main>
   </div>
+  <div class="nav-backdrop" id="navBackdrop" aria-hidden="true"></div>
 
   <!-- JS -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/skycons/1396634940/skycons.min.js"></script>
-  <script src="js/script.js?v=11"></script>
+  <script src="js/script.js?v=13"></script>
 </body>
 </html>

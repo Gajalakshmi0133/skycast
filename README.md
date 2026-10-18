@@ -27,10 +27,10 @@ SkyCast is a mobile-friendly weather web app for **current conditions**, forecas
 - **Frontend**: HTML5, CSS3, JavaScript (ES6)
 - **Framework**: Bootstrap 5
 - **Charts**: Chart.js
-- **Maps**: Leaflet with OpenWeather weather-map layers and OpenStreetMap, plus Esri satellite imagery
+- **Maps**: Leaflet with model-based temperature, cloud, humidity, pressure, wind and precipitation-estimate fields; NASA GIBS satellite imagery; independent street, terrain and satellite basemaps
 - **Animations**: Animate.css
 - **Icons**: Font Awesome + Weather Icons
-- **API**: OpenWeather current conditions and map tiles, Open-Meteo forecasts and air quality, GNews articles
+- **API**: OpenWeather current conditions, Open-Meteo model grids and forecasts, NASA GIBS satellite imagery, GNews articles
 
 ---
 
@@ -42,7 +42,9 @@ skycast/
 ├── css/
 │   └── style.css       # Custom styling
 ├── js/
-│   └── script.js       # Core UI logic and same-origin API calls
+│   ├── script.js       # Core UI logic and same-origin API calls
+│   └── core/
+│       └── weather-map.js # Map layer state and radar frame utilities
 ├── functions/
 │   └── api/            # Cloudflare Pages Functions; provider keys stay server-side
 ├── scripts/
@@ -69,28 +71,51 @@ cd skycast
 ### 2. Configure providers
 
 Copy `.env.example` to `.env`, then set `OPENWEATHER_API_KEY` for current
-conditions and `GNEWS_API_KEY` for live news. The Node server reads `.env` at
-startup and forwards browser requests through same-origin `/api/weather` and
-`/api/news` endpoints. Neither key is sent to or included in browser code.
+conditions, `GNEWS_API_KEY` for live news, and `OPEN_METEO_API_KEY` for map
+weather grids. The map grid uses Open-Meteo's customer API because the free
+service is restricted to non-commercial use. The Node server reads `.env` at
+startup and forwards browser requests through same-origin API endpoints. No
+provider key is sent to or included in browser code.
 GNews results are requested in English and filtered to weather, environment,
 climate and science topics. Never put provider keys in `index.html` or
 client-side JavaScript.
 
-Weather forecasts, air quality and geocoding continue to use keyless Open-Meteo
-endpoints through the server. The forecast studio and analytics charts visualize
-the forecast fields returned by that service and label them as forecasts; there
-is no historical-weather dataset or climate baseline configured. CSV downloads
-contain forecast values only.
+The weather map requests an Open-Meteo customer API grid for temperature,
+relative humidity, surface pressure, cloud cover, wind, and precipitation.
+These are model-analysis estimates, not station observations; precipitation is
+not radar. Configure a paid Open-Meteo API key for ad-supported deployment.
+Open-Meteo data requires CC BY 4.0 attribution. The forecast studio and
+analytics continue to label forecast data as forecasts; CSV downloads contain
+forecast values only.
 
 Official location-aware weather alerts use the NOAA/NWS active alerts API
 through the server proxy. No browser key is required; the server sends the
 configured `SKYCAST_CONTACT` value as its contact User-Agent. NOAA/NWS coverage
 is for the United States; locations outside that coverage return no active
 alerts rather than inferred or fabricated warnings. Alert responses are cached
-for five minutes. Weather-map overlays require a configured OpenWeather tile
-provider; without one, those layer controls are unavailable and only the
-independently attributed satellite imagery remains selectable. No historical or
-forecast map-frame playback is claimed.
+for five minutes.
+
+Weather Explorer's temperature, cloud, humidity, pressure, wind, and modeled
+precipitation estimate layers are built from the map viewport's sampled
+Open-Meteo grid. Wind particles follow the model's direction and speed. NASA
+GIBS MODIS Terra corrected true-color satellite imagery is a daily product and
+is not live geostationary cloud imagery. Street, terrain, and satellite
+basemaps are independent from these weather layers.
+
+The RainViewer public API terms currently allow personal and educational use
+only, not this ad-supported site. Rain radar therefore remains disabled by
+default, and no model precipitation is labeled or displayed as observed radar.
+Use the separate precipitation estimate layer for modeled rainfall, or
+integrate a commercial radar feed whose license and regional coverage include
+the intended deployment.
+After obtaining written permission that covers commercial use, set the
+Cloudflare/Node secret `RAINVIEWER_COMMERCIAL_LICENSE_CONFIRMED=true` to enable
+the integration. It reads current metadata dynamically, uses only returned
+historical frames, checks the provider's coverage mask at the selected
+location, and is constrained to RainViewer's documented maximum tile zoom of
+7. Coverage varies by country, including India; the integration reports
+unavailable coverage rather than substituting estimates. Do not enable this
+setting without the required permission.
 
 ### 3. Run the App
 
@@ -105,6 +130,17 @@ uses the API on port 3000 and the server allows local cross-origin requests.
 For a separate production frontend, set the `skycast-api-base` meta tag in
 `index.html` to the backend API URL, including `/api`. If a provider is
 unavailable, the UI shows a clear unavailable state instead of inventing data.
+
+The version in `package.json` is the canonical application version. Both the
+development server and production build inject it into the About page and app
+footer. `404.html` is the custom not-found page for static deployments; the
+Node server serves the same page with an HTTP 404 status.
+
+The Privacy Policy describes the providers and integrations present in this
+repository. Before publishing, the site owner must supply the monitored
+privacy contact, legal controller details, hosting-log retention period, and
+the active Google AdSense/consent settings. No analytics integration is
+currently included in the application code.
 
 ### Deploy to Cloudflare Pages
 
@@ -139,7 +175,12 @@ is not needed on Cloudflare.
    - In **Settings → Variables and Secrets → Functions**, add these for the
      **Production** environment:
    - `OPENWEATHER_API_KEY` — add as an encrypted **Secret**. Required for
-     current weather and OpenWeather map overlays.
+     current weather.
+   - `OPEN_METEO_API_KEY` — add as an encrypted **Secret** from a paid
+     Open-Meteo plan. Required for model-based weather map grids on this
+     ad-supported site.
+   - `RAINVIEWER_COMMERCIAL_LICENSE_CONFIRMED` — leave unset/false unless
+     RainViewer has granted permission for this site's commercial use.
    - `GNEWS_API_KEY` — add as an encrypted **Secret**. Required for live news.
    - `SKYCAST_CONTACT` — add as a regular **Variable** with the real NOAA/NWS
      contact email you supplied. This is used in the upstream User-Agent.
@@ -152,7 +193,8 @@ is not needed on Cloudflare.
    **Custom domains** and update `SITE_URL` in the build and Functions
    environments to that exact HTTPS URL, then rebuild and redeploy.
 
-The required production secrets are `OPENWEATHER_API_KEY` and `GNEWS_API_KEY`;
+The required production secrets are `OPENWEATHER_API_KEY`, `OPEN_METEO_API_KEY`,
+and `GNEWS_API_KEY`;
 the required regular production variables are `SKYCAST_CONTACT` and `SITE_URL`.
 `UPSTREAM_TIMEOUT_MS`, `UPSTREAM_MAX_RETRIES`, and
 `UPSTREAM_BACKOFF_BASE_MS` are optional regular Functions variables; Functions
@@ -163,10 +205,10 @@ headers. Never put secrets in `index.html`, `js/`, build output, or build
 environment variables.
 
 OpenWeather and GNews remain subject to their provider account access and
-quotas. Forecasts, geocoding, air quality, and UV use Open-Meteo; official
-alerts use NOAA/NWS and are only available in its service area. If an
-OpenWeather tile entitlement is not enabled for the configured account, map
-tile errors remain visible rather than being replaced with fabricated layers.
+quotas. Open-Meteo and NASA GIBS are attributed in the map interface. Confirm
+that all existing Open-Meteo integrations have the appropriate commercial
+entitlement before monetizing the site. Official alerts use NOAA/NWS and are
+only available in its service area. No fabricated weather tiles are generated.
 Cloudflare Pages static asset requests are free, while Pages Function
 invocations count toward the Workers Free daily quota (currently 100,000
 requests per day); check the [current Cloudflare Functions pricing

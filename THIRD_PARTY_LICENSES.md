@@ -5,17 +5,26 @@ SkyCast uses public data sources and open-source front-end libraries. This page 
 ## Data providers
 
 - Open-Meteo
-  - Terms: https://open-meteo.com/en/features/terms
-  - Data and meteorological services used for forecast, geocoding, air-quality, and UV information.
+  - Terms: https://open-meteo.com/en/terms
+  - Weather-map data is model-derived and distributed under CC BY 4.0, with credit shown in the map interface.
+  - The free API is non-commercial only. SkyCast's ad-supported deployment must use an Open-Meteo customer API subscription for weather-map data.
 - GNews
   - Terms: https://gnews.io/terms
   - Used through the server-side proxy for filtered English weather, environmental, climate and science headlines.
 - OpenStreetMap
   - License: Open Database License (ODbL) / CC BY-SA for map tiles and contributions
-  - Basemap service used by the map view when tiles are available.
+  - Street basemap service; attribution is displayed on the map.
 - ESRI ArcGIS World Imagery
   - Terms: https://www.esri.com/en-us/legal/terms
-  - Used as a static basemap layer and subject to Esri service terms.
+  - Used for selectable terrain and satellite basemaps and subject to Esri service terms.
+- NASA Global Imagery Browse Services (GIBS)
+  - Documentation: https://nasa-gibs.github.io/gibs-api-docs/
+  - Provides MODIS Terra corrected true-color satellite imagery. Daily imagery is delayed and is not a live geostationary cloud product.
+  - NASA requests this acknowledgment: “We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).”
+- RainViewer Weather Radar API
+  - API terms: https://www.rainviewer.com/api.html
+  - The public API is for personal and educational use only. It is disabled by default because SkyCast is ad-supported.
+  - Do not enable unless RainViewer grants permission covering the intended commercial deployment. When authorized, the map links to RainViewer and displays its attribution.
 
 ## Front-end libraries
 

@@ -26,6 +26,7 @@ test("Cloudflare status reports configuration without exposing credentials", asy
   assert.equal(response.status, 200);
   assert.match(body, /"configured":true/);
   assert.match(body, /"newsConfigured":true/);
+  assert.match(body, /"radarEnabled":false/);
   assert.doesNotMatch(body, /test-only-(openweather|gnews)-secret/);
 });
 
@@ -177,7 +178,7 @@ test("Cloudflare NOAA alerts handle out-of-coverage locations without failing", 
     });
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(contactHeader, "SkyCast/2.0 (+https://skycastio.netlify.app; test@example.com)");
+    assert.equal(contactHeader, "SkyCast/2.0 (+https://skycast.pages.dev; test@example.com)");
     assert.deepEqual(body.alerts, []);
     assert.equal(body.provider, "NOAA/NWS");
     assert.ok(Number.isFinite(Date.parse(body.fetchedAt)));
@@ -186,36 +187,135 @@ test("Cloudflare NOAA alerts handle out-of-coverage locations without failing", 
   }
 });
 
-test("Cloudflare map tile proxy keeps its configured key on the upstream request only", async () => {
+test("Cloudflare weather map grid uses the commercial Open-Meteo endpoint without exposing its key", async () => {
   const originalFetch = globalThis.fetch;
-  const secret = "test-only-openweather-secret";
+  const secret = "test-only-open-meteo-secret";
   let upstreamUrl;
   globalThis.fetch = async (url) => {
     upstreamUrl = String(url);
-    return new Response(Uint8Array.from([137, 80, 78, 71]), {
-      headers: { "content-type": "image/png" }
-    });
+    const target = new URL(upstreamUrl);
+    assert.equal(target.searchParams.get("latitude").split(",").length, 35);
+    assert.equal(target.searchParams.get("longitude").split(",").length, 35);
+    return Response.json(Array.from({ length: 35 }, (_, index) => ({
+      current: {
+        time: "2026-10-16T12:00",
+        temperature_2m: index,
+        relative_humidity_2m: 40 + index,
+        surface_pressure: 1000 + index,
+        wind_speed_10m: index,
+        wind_direction_10m: 180,
+        cloud_cover: index * 2,
+        precipitation: index === 0 ? 0 : 1
+      }
+    })));
   };
   try {
-    const response = await routeApi({
-      request: request("/api/map/temp_new/1/0/0.png"),
-      env: { OPENWEATHER_API_KEY: secret }
-    });
+    const response = await routeApi({ request: request("/api/map-data?bounds=10,5,15,10"), env: { OPEN_METEO_API_KEY: secret } });
+    const body = await response.text();
     assert.equal(response.status, 200);
-    assert.match(upstreamUrl, /tile\.openweathermap\.org/);
+    assert.match(upstreamUrl, /customer-api\.open-meteo\.com\/v1\/forecast/);
     assert.match(upstreamUrl, new RegExp(encodeURIComponent(secret)));
-    assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], [137, 80, 78, 71]);
+    assert.match(body, /"provider":"Open-Meteo"/);
+    assert.match(body, /"dataType":"weather-model analysis"/);
+    assert.match(body, /"points":\[/);
+    assert.doesNotMatch(body, new RegExp(secret));
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test("Cloudflare map tile proxy reports missing credentials without exposing keys", async () => {
-  const secret = "test-only-openweather-secret";
+test("Cloudflare weather map grid reports missing commercial credentials", async () => {
   const response = await routeApi({
-    request: request("/api/map/temp_new/1/0/0.png"),
+    request: request("/api/map-data?bounds=20,10,25,15"),
     env: {}
   });
   assert.equal(response.status, 503);
-  assert.doesNotMatch(await response.text(), new RegExp(secret));
+  assert.match((await response.json()).message, /customer API key/);
+});
+
+test("Cloudflare weather map grid reports upstream failures instead of returning fallback data", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response("provider unavailable", { status: 503 });
+  try {
+    const response = await routeApi({
+      request: request("/api/map-data?bounds=30,20,35,25"),
+      env: { OPEN_METEO_API_KEY: "test-only-map-key", UPSTREAM_MAX_RETRIES: "0" }
+    });
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).message, /temporarily unavailable/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Cloudflare weather map grid reports missing provider values", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => Response.json(Array.from({ length: 35 }, () => ({ current: {} })));
+  try {
+    const response = await routeApi({
+      request: request("/api/map-data?bounds=35,25,40,30"),
+      env: { OPEN_METEO_API_KEY: "test-only-map-key" }
+    });
+    assert.equal(response.status, 502);
+    assert.match((await response.json()).message, /temporarily unavailable/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RainViewer metadata remains disabled until commercial-use permission is confirmed", async () => {
+  let called = false;
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    called = true;
+    return Response.json({});
+  };
+  try {
+    const response = await routeApi({ request: request("/api/radar/metadata"), env: {} });
+    assert.equal(response.status, 503);
+    assert.match((await response.json()).message, /ad-supported commercial use/);
+    assert.equal(called, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("RainViewer coverage reports unavailable until the provider is licensed", async () => {
+  const response = await routeApi({
+    request: request("/api/radar/coverage/7/64/44.png"),
+    env: {}
+  });
+  assert.equal(response.status, 503);
+  assert.match((await response.json()).message, /disabled pending commercial permission/);
+});
+
+test("RainViewer metadata exposes only validated past frames when licensed", async () => {
+  const originalFetch = globalThis.fetch;
+  const now = Math.floor(Date.now() / 1000);
+  let upstreamUrl;
+  globalThis.fetch = async url => {
+    upstreamUrl = String(url);
+    return Response.json({
+      host: "https://tilecache.rainviewer.com",
+      generated: now,
+      radar: { past: [
+        { time: now - 600, path: "/v2/radar/old-frame" },
+        { time: now + 600, path: "/v2/radar/future-frame" },
+        { time: now - 300, path: "/invalid/path" }
+      ] }
+    });
+  };
+  try {
+    const response = await routeApi({
+      request: request("/api/radar/metadata"),
+      env: { RAINVIEWER_COMMERCIAL_LICENSE_CONFIRMED: "true" }
+    });
+    assert.equal(response.status, 200);
+    assert.equal(upstreamUrl, "https://api.rainviewer.com/public/weather-maps.json");
+    const body = await response.json();
+    assert.equal(body.provider, "RainViewer");
+    assert.deepEqual(body.frames, [{ time: now - 600, path: "/v2/radar/old-frame" }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

@@ -21,9 +21,24 @@ let analyticsCharts = [];
 let weatherMap = null;
 let mapMarker = null;
 let mapLayers = {};
+let baseMapLayers = {};
 let mapMode = "temperature";
-let mapRefreshIntervals = {};
-let mapLayerProviderReady = false;
+let mapState = null;
+let mapTools = null;
+const mapToolsReady = import("./core/weather-map.js").then(tools => {
+  mapTools = tools;
+  mapState = tools.createMapState();
+  return tools;
+});
+let mapDataCache = new Map();
+let mapWeatherRequest = null;
+let mapRefreshTimer = null;
+let mapDebounceTimer = null;
+let radarPlaybackTimer = null;
+let radarMetadata = null;
+let radarFrames = [];
+let mapWeatherData = null;
+let mapStatus = {};
 let particleInterval = null;
 let particleResizeBound = false;
 let currentUnits = localStorage.getItem("units") || "metric";
@@ -85,9 +100,27 @@ const safetyTopics = [
   { title: "Extreme Cold", icon: "fa-snowflake", summary: "Cold exposure and ice can threaten health, travel and utilities.", before: "Insulate exposed pipes, charge devices and check heating equipment.", during: "Stay warm and dry; limit travel and check on neighbors who need help.", after: "Avoid downed lines and report utility damage through official channels." }
 ];
 
+function setMobileNavOpen(open) {
+  const toggle = document.getElementById("mobileMenuToggle");
+  const sidebar = document.getElementById("appSidebar");
+  if (!toggle || !sidebar) return;
+  const wasOpen = document.body.classList.contains("mobile-nav-open");
+  document.body.classList.toggle("mobile-nav-open", open);
+  toggle.setAttribute("aria-expanded", String(open));
+  toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+  sidebar.setAttribute("aria-hidden", String(!open && window.matchMedia("(max-width: 768px)").matches));
+  if (open) setTimeout(() => sidebar.querySelector(".nav-link")?.focus(), 0);
+  else if (wasOpen && window.matchMedia("(max-width: 768px)").matches) toggle.focus();
+}
+
+function toggleMobileNav() {
+  setMobileNavOpen(!document.body.classList.contains("mobile-nav-open"));
+}
+
 function showPage(pageId, event) {
   event?.preventDefault();
   const targetPageId = pageId === "saved" ? "dashboard" : pageId;
+  const visiblePageId = document.getElementById(`${targetPageId}-page`) ? targetPageId : "not-found";
   if (pageId !== "forecast" && forecastPlaybackTimer) toggleForecastPlayback();
 
   // Hide all sections
@@ -96,7 +129,7 @@ function showPage(pageId, event) {
   });
   
   // Show selected section
-  const target = document.getElementById(`${targetPageId}-page`);
+  const target = document.getElementById(`${visiblePageId}-page`);
   if (target) {
     target.style.display = 'block';
     target.classList.add('animate__animated', 'animate__fadeIn');
@@ -109,6 +142,11 @@ function showPage(pageId, event) {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   });
+
+  if (event?.currentTarget?.getAttribute("href")?.startsWith("#")) {
+    history.pushState({ page: pageId }, "", `#${pageId}`);
+  }
+  setMobileNavOpen(false);
 
   // Special handling for map when switching to maps page
   if (targetPageId === 'maps' && weatherMap) {
@@ -139,13 +177,19 @@ function showPage(pageId, event) {
   if (content) content.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+window.addEventListener("hashchange", () => {
+  const pageId = window.location.hash.slice(1) || "dashboard";
+  if (document.getElementById(`${pageId}-page`) || pageId === "saved") showPage(pageId);
+  else showPage("not-found");
+});
+
 function toggleSidebar() {
   const collapsed = document.body.classList.toggle("sidebar-collapsed");
   const button = document.getElementById("sidebarCollapse");
   if (!button) return;
   button.setAttribute("aria-expanded", String(!collapsed));
   button.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
-  button.innerHTML = `<i class="fas fa-angles-${collapsed ? "right" : "left"}"></i>`;
+  button.innerHTML = `<i class="fas fa-chevron-${collapsed ? "right" : "left"}"></i>`;
 }
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -155,6 +199,39 @@ document.addEventListener("DOMContentLoaded", () => {
   setInterval(updateClock, 1000);
   document.getElementById("unitToggle").textContent = currentUnits === "metric" ? "°C" : "°F";
   updateUnitSettingsLabel();
+  document.querySelectorAll("[data-app-version]").forEach((element) => {
+    element.textContent = document.querySelector('meta[name="skycast-version"]')?.content || "Unavailable";
+  });
+  document.getElementById("navBackdrop")?.addEventListener("click", () => setMobileNavOpen(false));
+  document.addEventListener("keydown", (event) => {
+    if (!document.body.classList.contains("mobile-nav-open")) return;
+    if (event.key === "Escape") {
+      setMobileNavOpen(false);
+      return;
+    }
+    if (event.key === "Tab") {
+      const sidebar = document.getElementById("appSidebar");
+      const focusable = [...sidebar.querySelectorAll('a[href], button:not([disabled])')];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (!sidebar.contains(document.activeElement)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+  window.matchMedia("(min-width: 769px)").addEventListener("change", (event) => {
+    document.getElementById("appSidebar")?.setAttribute("aria-hidden", String(!event.matches));
+    if (event.matches) setMobileNavOpen(false);
+  });
+  document.getElementById("appSidebar")?.setAttribute("aria-hidden", String(window.matchMedia("(max-width: 768px)").matches));
   registerServiceWorker();
   
   // Weather and official alerts refresh on separate provider cadences.
@@ -164,6 +241,10 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 600000);
 
   const urlParams = new URLSearchParams(window.location.search);
+  if (window.location.hash) {
+    const pageId = window.location.hash.slice(1);
+    showPage(document.getElementById(`${pageId}-page`) || pageId === "saved" ? pageId : "not-found");
+  }
   const city = urlParams.get("city");
   if (city) {
     getSearchInput().value = city;
@@ -268,32 +349,48 @@ function startVoiceSearch() {
   recognition.start();
 }
 
-async function getWeatherByCoords(lat, lon) {
-  setDataStatus("Loading local weather", "loading");
+function showWeatherLoading() {
+  const container = document.getElementById("weatherContainer");
+  if (!container) return;
+  container.innerHTML = `<div class="col-12"><div class="weather-card weather-skeleton" aria-label="Loading weather" role="status"><span class="skeleton-line skeleton-title"></span><span class="skeleton-line"></span><span class="skeleton-line skeleton-short"></span><span class="skeleton-line skeleton-block"></span></div></div>`;
+  document.getElementById("forecastContainer").replaceChildren();
+}
+
+function showWeatherError(error) {
+  const message = error instanceof Error ? error.message : "The weather service is temporarily unavailable.";
+  document.getElementById("weatherContainer").innerHTML = `<div class="col-md-8"><div class="weather-card error-state" role="alert"><i class="fas fa-triangle-exclamation"></i><h2>Weather could not be loaded</h2><p>${escapeHtml(message)}</p><button class="btn btn-outline-light btn-sm" type="button" onclick="refreshWeather()"><i class="fas fa-rotate-right me-2"></i>Try again</button></div></div>`;
+  document.getElementById("forecastContainer").replaceChildren();
+  document.getElementById("visualsContainer").style.display = "none";
+  document.getElementById("hourlyContainer").style.display = "none";
+  document.getElementById("extendedForecast").style.display = "none";
+  document.getElementById("intelligenceSection").style.display = "none";
+  setDataStatus("Weather unavailable", "error");
+}
+
+function renderCurrentConditions(data) {
+  latestWeatherData = data;
+  latestForecastData = null;
+  displayCurrent(data);
+  document.getElementById("visualsContainer").style.display = "none";
+  document.getElementById("hourlyContainer").style.display = "none";
+  document.getElementById("extendedForecast").style.display = "none";
+  document.getElementById("forecastContainer").replaceChildren();
+  document.getElementById("headerUpdated").textContent = `Current conditions updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  setDataStatus("Current conditions loaded");
+  loadOptionalLocationData(data);
+}
+
+async function loadForecastForLocation(currentData) {
+  const { lat, lon } = currentData.coord;
   try {
-    const currentData = await fetchJson(apiUrl("weather", { lat, lon, units: "metric" }));
-
-    if (currentData.cod !== 200) {
-      throw new Error(currentData.message);
-    }
-
     const forecastData = await fetchJson(apiUrl("forecast", { lat, lon, units: "metric" }));
+    if (!Array.isArray(forecastData.list) || !forecastData.list.length) {
+      throw new Error("The forecast provider returned no forecast data.");
+    }
     currentData.timezone = forecastData.timezone || currentData.timezone;
     currentData.timezoneAbbreviation = forecastData.timezoneAbbreviation || currentData.timezoneAbbreviation;
     currentData.utcOffsetSeconds = forecastData.utcOffsetSeconds ?? currentData.utcOffsetSeconds;
-    latestWeatherData = currentData;
     latestForecastData = forecastData;
-    const locationName = [currentData.name, currentData.sys?.country].filter(Boolean).join(", ");
-    getSearchInput().value = locationName;
-    const globalInput = document.getElementById("globalCityInput");
-    if (globalInput) globalInput.value = locationName;
-    const locationUrl = new URL(window.location.href);
-    locationUrl.searchParams.delete("city");
-    locationUrl.searchParams.set("lat", String(lat));
-    locationUrl.searchParams.set("lon", String(lon));
-    window.history.replaceState({}, "", locationUrl);
-
-    displayCurrent(currentData);
     displayForecast(forecastData);
     displayHourly(forecastData);
     fetchExtendedForecast(lat, lon);
@@ -304,11 +401,43 @@ async function getWeatherByCoords(lat, lon) {
     document.getElementById("visualsContainer").style.display = "block";
     document.getElementById("hourlyContainer").style.display = "block";
     setDataStatus("Live data");
-    loadOptionalLocationData(currentData);
+  } catch (error) {
+    latestForecastData = null;
+    console.warn("Forecast unavailable:", error.message);
+    document.getElementById("forecastContainer").innerHTML = `<div class="col-12"><div class="weather-card error-state" role="status"><i class="fas fa-cloud-exclamation"></i><h3>Forecast temporarily unavailable</h3><p>Current conditions are available, but the forecast service did not return data. Please try again shortly.</p><button class="btn btn-outline-light btn-sm" type="button" onclick="retryForecast()"><i class="fas fa-rotate-right me-2"></i>Retry forecast</button></div></div>`;
+    document.getElementById("visualsContainer").style.display = "none";
+    document.getElementById("hourlyContainer").style.display = "none";
+    document.getElementById("extendedForecast").style.display = "none";
+    document.getElementById("dailyInsight").style.display = "none";
+    setDataStatus("Forecast unavailable", "warning");
+  }
+}
+
+function retryForecast() {
+  if (latestWeatherData) loadForecastForLocation(latestWeatherData);
+  else refreshWeather();
+}
+
+async function getWeatherByCoords(lat, lon) {
+  setDataStatus("Loading local weather", "loading");
+  showWeatherLoading();
+  try {
+    const currentData = await fetchJson(apiUrl("weather", { lat, lon, units: "metric" }));
+    if (currentData.cod !== 200) throw new Error(currentData.message);
+
+    const locationName = [currentData.name, currentData.sys?.country].filter(Boolean).join(", ");
+    getSearchInput().value = locationName;
+    const locationUrl = new URL(window.location.href);
+    locationUrl.searchParams.delete("city");
+    locationUrl.searchParams.set("lat", String(lat));
+    locationUrl.searchParams.set("lon", String(lon));
+    window.history.replaceState({}, "", locationUrl);
+
+    renderCurrentConditions(currentData);
+    await loadForecastForLocation(currentData);
   } catch (err) {
     console.error("Geolocation weather error:", err);
-    setDataStatus("Weather unavailable", "error");
-    document.getElementById("weatherContainer").innerHTML = `<div class="col-md-8"><div class="weather-card error-state" role="alert"><i class="fas fa-triangle-exclamation"></i><h4>Weather could not be loaded</h4><p>${escapeHtml(err.message)}</p><button class="btn btn-outline-light btn-sm" type="button" onclick="refreshWeather()"><i class="fas fa-rotate-right me-2"></i>Try again</button></div></div>`;
+    showWeatherError(err);
   }
 }
 
@@ -735,6 +864,8 @@ function toggleUnits() {
   } else if (city) {
     getWeather(city);
   }
+  if (mapWeatherData && mapMode === "temperature") renderWeatherMapOverlay();
+  if (mapMode === "temperature") updateMapLegend();
 }
 
 function updateUnitSettingsLabel() {
@@ -776,7 +907,9 @@ function formatLocationTime(epochSeconds, timezone = "UTC") {
 function setDataStatus(message, state = "ready") {
   const status = document.getElementById("dataStatus");
   if (!status) return;
-  const icon = state === "loading" ? "fa-circle-notch fa-spin" : state === "error" ? "fa-triangle-exclamation" : "fa-circle-check";
+  const icon = state === "loading" ? "fa-circle-notch fa-spin"
+    : state === "error" || state === "warning" ? "fa-triangle-exclamation"
+      : "fa-circle-check";
   status.innerHTML = `<i class="fas ${icon} me-1"></i>${message}`;
   status.className = `status-pill status-${state}`;
   const updated = document.getElementById("headerUpdated");
@@ -919,57 +1052,31 @@ async function renderDashboard() {
 
 async function getWeather(cityToSearch) {
   let city = typeof cityToSearch === 'string' ? cityToSearch : getSearchInput().value.trim();
-  
-  // Basic sanitization
   city = city.replace(/[<>]/g, "");
 
   if (!city) {
-    alert("Please enter a city name.");
+    getSearchInput().focus();
+    getSearchInput().setCustomValidity("Enter a city name to search.");
+    getSearchInput().reportValidity();
+    getSearchInput().setCustomValidity("");
     return;
   }
 
   getSearchInput().value = city;
-
-  // Update URL without reloading
-  const newUrl = `${window.location.protocol}//${window.location.host}${window.location.pathname}?city=${encodeURIComponent(city)}`;
-  window.history.pushState({ path: newUrl }, "", newUrl);
-
+  const nextUrl = new URL(window.location.href);
+  nextUrl.searchParams.set("city", city);
+  nextUrl.searchParams.delete("lat");
+  nextUrl.searchParams.delete("lon");
+  window.history.pushState({ city }, "", nextUrl);
   setDataStatus("Loading weather", "loading");
+  showWeatherLoading();
   try {
     const currentData = await fetchJson(apiUrl("weather", { q: city, units: "metric" }));
-
-    if (currentData.cod !== 200) {
-      throw new Error(currentData.message);
-    }
-
-    const forecastData = await fetchJson(apiUrl("forecast", { q: city, units: "metric" }));
-    currentData.timezone = forecastData.timezone || currentData.timezone;
-    currentData.timezoneAbbreviation = forecastData.timezoneAbbreviation || currentData.timezoneAbbreviation;
-    currentData.utcOffsetSeconds = forecastData.utcOffsetSeconds ?? currentData.utcOffsetSeconds;
-    latestWeatherData = currentData;
-    latestForecastData = forecastData;
-
-    const prompt = document.getElementById("searchPrompt");
-    if (prompt) prompt.style.display = "none";
-
-    displayCurrent(currentData);
-    displayForecast(forecastData);
-    displayHourly(forecastData);
-    fetchExtendedForecast(currentData.coord.lat, currentData.coord.lon);
-    renderChart(forecastData);
-    renderForecastStudio();
-    renderForecastAnalytics();
-    renderActivityRecommendation(currentData, forecastData);
-    document.getElementById("visualsContainer").style.display = "block";
-    document.getElementById("hourlyContainer").style.display = "block";
-    setDataStatus("Live data");
-    loadOptionalLocationData(currentData);
+    if (currentData.cod !== 200) throw new Error(currentData.message);
+    renderCurrentConditions(currentData);
+    await loadForecastForLocation(currentData);
   } catch (err) {
-    document.getElementById("weatherContainer").innerHTML = `<div class="col-md-8"><div class="weather-card error-state" role="alert"><i class="fas fa-triangle-exclamation"></i><h4>Weather could not be loaded</h4><p>${escapeHtml(err.message)}</p><button class="btn btn-outline-light btn-sm" type="button" onclick="refreshWeather()"><i class="fas fa-rotate-right me-2"></i>Try again</button></div></div>`;
-    document.getElementById("forecastContainer").innerHTML = "";
-    document.getElementById("visualsContainer").style.display = "none";
-    document.getElementById("intelligenceSection").style.display = "none";
-    setDataStatus("Unable to load weather", "error");
+    showWeatherError(err);
   }
 }
 
@@ -1478,20 +1585,6 @@ function renderChart(data) {
   });
 }
 
-const mapLayerDefinitions = {
-  temperature: { path: "temp_new", title: "Temperature", units: "°C", range: "-30°  0°  30°", colors: "#2c7bb6, #abd9e9, #ffffbf, #fdae61, #d7191c" },
-  rain: { path: "precipitation_new", title: "Rain radar", units: "Precipitation", range: "Light  Moderate  Heavy", colors: "#85d7ff, #32c48d, #ffe066, #ff7b54, #d7263d" },
-  clouds: { path: "clouds_new", title: "Cloud cover", units: "%", range: "0%  50%  100%", colors: "#e8f1f8, #8fa8ba, #33495f" },
-  humidity: { path: "humidity_new", title: "Relative humidity", units: "%", range: "0%  50%  100%", colors: "#fff7bc, #7fcdbb, #2c7fb8" },
-  pressure: { path: "pressure_new", title: "Pressure", units: "hPa", range: "980  1013  1040", colors: "#313695, #74add1, #ffffbf, #f46d43, #a50026" },
-  wind: { path: "wind_new", title: "Wind speed", units: "m/s", range: "Calm  10  30+", colors: "#ffffcc, #a1dab4, #41b6c4, #225ea8" },
-  satellite: { path: "satellite", title: "Satellite imagery", units: "Visible imagery", range: "Natural color", colors: "#273746, #718c6a, #d5c7a1" }
-};
-
-function mapApiPath(path) {
-  return `${apiBase}/map/${path}/{z}/{x}/{y}.png`;
-}
-
 function updateMapMessage(message = "") {
   const element = document.getElementById("mapLayerMessage");
   if (!element) return;
@@ -1501,9 +1594,20 @@ function updateMapMessage(message = "") {
 
 function updateMapLegend() {
   const element = document.getElementById("mapLegend");
-  const definition = mapLayerDefinitions[mapMode];
-  if (!element || !definition) return;
-  element.innerHTML = `<strong>${definition.title}</strong><span>${definition.units}</span><div class="map-legend-scale" style="background: linear-gradient(90deg, ${definition.colors});"></div><div class="map-legend-labels"><span>${definition.range.split("  ")[0]}</span><span>${definition.range.split("  ").at(-1)}</span></div>`;
+  const definition = mapTools?.MAP_LAYER_DEFINITIONS[mapMode];
+  if (!definition) return;
+  const caption = document.getElementById("mapLegendCaption");
+  if (mapMode === "satellite") {
+    if (element) element.innerHTML = `<strong>${definition.title}</strong><span>${definition.units} · no numeric scale</span>`;
+    if (caption) caption.textContent = `${definition.title} · ${definition.units}`;
+    return;
+  }
+  const range = mapMode === "temperature" && currentUnits === "imperial"
+    ? [-4, 32, 50, 68, 104].map(value => `${value}°F`).join("  ")
+    : definition.range;
+  const units = mapMode === "temperature" ? `°${currentUnits === "metric" ? "C" : "F"}` : definition.units;
+  if (element) element.innerHTML = `<strong>${definition.title}</strong><span>${units}</span><div class="map-legend-scale" style="background: linear-gradient(90deg, ${definition.colors.join(", ")});"></div><div class="map-legend-labels"><span>${range.split("  ")[0]}</span><span>${range.split("  ").at(-1)}</span></div>`;
+  if (caption) caption.textContent = `${definition.title} · ${range} ${units}`;
 }
 
 function updateMapInfo(data) {
@@ -1513,86 +1617,257 @@ function updateMapInfo(data) {
   card.innerHTML = `<strong>${escapeHtml(data.name || "Selected location")}</strong><span>${Number(data.coord.lat).toFixed(3)}, ${Number(data.coord.lon).toFixed(3)}</span><span>${escapeHtml(cityTimezoneLabel(data))}</span><small>Local time ${localTime}</small>`;
 }
 
-function refreshMapLayer(mode) {
-  if (!mapLayerProviderReady && mode !== "satellite") return;
-  const layer = mapLayers[mode];
-  if (!layer) return;
-  layer.setUrl(`${mapApiPath(mapLayerDefinitions[mode].path)}?refresh=${Date.now()}`);
+function mapDefinition(mode = mapMode) {
+  return mapTools.MAP_LAYER_DEFINITIONS[mode];
 }
 
-function configureMapLayer(layer, mode) {
-  layer.on("loading", () => {
-    if (mode === mapMode) updateMapMessage(`Loading ${mapLayerDefinitions[mode].title.toLowerCase()} layer...`);
+function mapOverlayValue(point, field) {
+  if (field === "wind") return point.windSpeed;
+  return point[field];
+}
+
+function mapBoundsCoordinates() {
+  const bounds = weatherMap.getBounds();
+  const wrap = longitude => ((longitude + 180) % 360 + 360) % 360 - 180;
+  const north = Math.min(80, bounds.getNorth());
+  const center = (bounds.getWest() + bounds.getEast()) / 2;
+  const longitudeSpan = Math.min(360, Math.max(0.01, bounds.getEast() - bounds.getWest()));
+  const plotWest = longitudeSpan === 360 ? center - 180 : bounds.getWest();
+  const plotEast = plotWest + longitudeSpan;
+  return {
+    west: wrap(plotWest),
+    south: Math.min(north - 0.01, Math.max(-80, bounds.getSouth())),
+    east: wrap(plotEast),
+    north,
+    plotWest,
+    plotEast
+  };
+}
+
+function mapBoundsKey(bounds) {
+  return [bounds.west, bounds.south, bounds.east, bounds.north].map(value => Number(value).toFixed(2)).join(",");
+}
+
+function svgPoint(point, bounds, field) {
+  const longitude = point.lon + 360 * Math.ceil((bounds.plotWest - point.lon) / 360);
+  const x = ((longitude - bounds.plotWest) / (bounds.plotEast - bounds.plotWest)) * 1000;
+  const y = ((bounds.north - point.lat) / (bounds.north - bounds.south)) * 600;
+  const value = mapOverlayValue(point, field);
+  if (!Number.isFinite(value)) return "";
+  const color = mapTools.weatherColor(mapDefinition(), value);
+  if (!color) return "";
+  let alpha = 0.62;
+  if (field === "clouds" || field === "humidity") alpha *= value / 100;
+  if (field === "precipitation") {
+    if (value <= 0) return "";
+    alpha *= Math.min(1, 0.4 + value / 20);
+  }
+  const radius = field === "precipitation" ? 130 : 120;
+  return `<circle cx="${x}" cy="${y}" r="${radius}" fill="${color}" fill-opacity="${alpha}"/>`;
+}
+
+function createWeatherFieldSvg(data, bounds) {
+  const definition = mapDefinition();
+  const field = definition.field;
+  if (field === "wind") {
+    const particles = data.points.flatMap((point, index) => {
+      const speed = Number(point.windSpeed);
+      const direction = Number(point.windDirection);
+      if (!Number.isFinite(speed) || speed <= 0 || !Number.isFinite(direction)) return [];
+      const longitude = point.lon + 360 * Math.ceil((bounds.plotWest - point.lon) / 360);
+      const x = ((longitude - bounds.plotWest) / (bounds.plotEast - bounds.plotWest)) * 1000;
+      const y = ((bounds.north - point.lat) / (bounds.north - bounds.south)) * 600;
+      const bearing = (direction + 180) * Math.PI / 180;
+      const length = Math.max(18, Math.min(90, speed * 1.5));
+      const dx = Math.sin(bearing) * length;
+      const dy = -Math.cos(bearing) * length;
+      const color = mapTools.weatherColor(definition, speed);
+      const duration = Math.max(0.7, 3.8 - speed / 35);
+      return `<circle cx="${x}" cy="${y}" r="2.2" fill="${color}"><animateMotion dur="${duration}s" repeatCount="indefinite" path="M 0 0 L ${dx} ${dy}"/></circle>`;
+    }).join("");
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" preserveAspectRatio="none">${particles}</svg>`;
+  }
+  const circles = data.points.map(point => svgPoint(point, bounds, field)).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" preserveAspectRatio="none"><defs><filter id="field-blur"><feGaussianBlur stdDeviation="16"/></filter></defs><g filter="url(#field-blur)">${circles}</g></svg>`;
+}
+
+function updateMapSource() {
+  const note = document.getElementById("mapSourceNote");
+  const definition = mapDefinition();
+  const timestamp = mapWeatherData?.modelTime ? ` Model time: ${mapWeatherData.modelTime} UTC.` : "";
+  const notes = {
+    temperature: `Open-Meteo global weather model · estimated near-surface air temperature (°${currentUnits === "metric" ? "C" : "F"})${timestamp} Values are not station observations. CC BY 4.0; paid API required for ad-supported use.`,
+    precipitation: `Open-Meteo model precipitation estimate in mm. This is not observed rainfall or radar imagery.${timestamp} CC BY 4.0; paid API required for ad-supported use.`,
+    clouds: `Open-Meteo weather model cloud-cover estimate (%), not satellite imagery.${timestamp} CC BY 4.0; paid API required for ad-supported use.`,
+    humidity: `Open-Meteo model relative humidity at 2 m (%).${timestamp} CC BY 4.0; paid API required for ad-supported use.`,
+    pressure: `Open-Meteo model surface pressure in hPa.${timestamp} CC BY 4.0; paid API required for ad-supported use.`,
+    wind: `Open-Meteo model 10 m wind speed and direction; animated particles follow modeled flow.${timestamp} CC BY 4.0; paid API required for ad-supported use.`,
+    satellite: `NASA GIBS MODIS Terra corrected true-color imagery for ${mapLayers.satelliteDate || "the latest daily image"}. Daily satellite imagery is delayed and is not live geostationary weather imagery. We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).`
+  };
+  if (note) note.textContent = notes[mapMode] || `${definition.title} · ${definition.units}`;
+}
+
+function renderWeatherMapOverlay() {
+  if (!weatherMap || !mapWeatherData || !mapTools || !["temperature", "precipitation", "clouds", "humidity", "pressure", "wind"].includes(mapMode)) return;
+  const bounds = mapBoundsCoordinates();
+  const svg = createWeatherFieldSvg(mapWeatherData, bounds);
+  const dataUrl = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+  if (mapLayers[mapMode]) weatherMap.removeLayer(mapLayers[mapMode]);
+  mapLayers[mapMode] = L.imageOverlay(dataUrl, [[bounds.south, bounds.plotWest], [bounds.north, bounds.plotEast]], {
+    opacity: mapState.opacity,
+    interactive: false
+  }).addTo(weatherMap);
+  if (mapMode === "precipitation" && !mapWeatherData.points.some(point => Number(point.precipitation) > 0)) {
+    updateMapMessage("No modeled precipitation in the visible map area. This is a model estimate, not radar observation.");
+  } else {
+    updateMapMessage();
+  }
+}
+
+async function requestMapData(bounds, signal) {
+  const response = await fetch(apiUrl("map-data", { bounds: mapBoundsKey(bounds) }), { signal });
+  const body = await response.json();
+  if (!response.ok) throw Object.assign(new Error(body.message || "Weather map data is temporarily unavailable."), { status: response.status });
+  if (!Array.isArray(body.points) || !body.points.length) throw new Error("Weather model returned no data for this map area.");
+  return body;
+}
+
+async function refreshMapWeatherData() {
+  if (!weatherMap || mapMode === "satellite" || mapMode === "rain") return;
+  const bounds = mapBoundsCoordinates();
+  const key = mapBoundsKey(bounds);
+  const cached = mapDataCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    mapWeatherData = cached.data;
+    renderWeatherMapOverlay();
+    return;
+  }
+  mapWeatherRequest?.abort();
+  const controller = new AbortController();
+  mapWeatherRequest = controller;
+  updateMapMessage(`Loading ${mapDefinition().title.toLowerCase()} model data…`);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const data = await requestMapData(bounds, controller.signal);
+      if (controller.signal.aborted) return;
+      mapWeatherData = data;
+      mapDataCache.set(key, { data, expiresAt: Date.now() + 300_000 });
+      if (mapDataCache.size > 30) mapDataCache.delete(mapDataCache.keys().next().value);
+      document.getElementById("mapLastUpdated").textContent = `Updated ${new Date(data.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+      document.getElementById("radarTimestamp").textContent = data.modelTime ? `Model data · ${data.modelTime} UTC` : "Model data time unavailable";
+      renderWeatherMapOverlay();
+      return;
+    } catch (error) {
+      if (error.name === "AbortError" || controller.signal.aborted) return;
+      if (error.status === 503 && error.message.includes("Open-Meteo customer API key")) {
+        updateMapMessage(error.message);
+        return;
+      }
+      if (attempt === 2) {
+        console.warn("Weather map data unavailable:", error.message);
+        updateMapMessage(error.message);
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 400 * (attempt + 1)));
+    }
+  }
+}
+
+function setupMapLayers() {
+  const street = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors", maxZoom: 19
   });
-  layer.on("load", () => {
-    if (mode === mapMode) updateMapMessage();
+  const terrain = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Tiles &copy; Esri", maxZoom: 19
   });
-  layer.on("tileerror", () => {
-    if (mode === mapMode) updateMapMessage(`${mapLayerDefinitions[mode].title} layer is temporarily unavailable.`);
+  const satelliteBasemap = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+    attribution: "Imagery &copy; Esri", maxZoom: 19
   });
-  return layer;
+  baseMapLayers = { street, terrain, satellite: satelliteBasemap };
+  baseMapLayers[mapState.basemap].addTo(weatherMap);
+  const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  mapLayers.satelliteDate = date;
+  mapLayers.satellite = L.tileLayer(
+    `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+    { attribution: "Imagery provided by NASA GIBS", maxNativeZoom: 9, maxZoom: 12, opacity: mapState.opacity }
+  );
+  mapLayers.rain = null;
+}
+
+function updateSatelliteLayer() {
+  const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (date === mapLayers.satelliteDate || !weatherMap) return;
+  const visible = weatherMap.hasLayer(mapLayers.satellite);
+  if (visible) weatherMap.removeLayer(mapLayers.satellite);
+  mapLayers.satelliteDate = date;
+  mapLayers.satellite = L.tileLayer(
+    `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/MODIS_Terra_CorrectedReflectance_TrueColor/default/${date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,
+    { attribution: "Imagery provided by NASA GIBS", maxNativeZoom: 9, maxZoom: 12, opacity: mapState.opacity }
+  );
+  if (visible) mapLayers.satellite.addTo(weatherMap);
+}
+
+function addMapControl(id, className, position) {
+  const control = L.control({ position });
+  control.onAdd = () => {
+    const element = document.createElement("div");
+    element.id = id;
+    element.className = className;
+    if (id === "mapLayerMessage") element.hidden = true;
+    return element;
+  };
+  control.addTo(weatherMap);
 }
 
 async function renderMap(data) {
+  await mapToolsReady;
   const lat = Number(data.coord.lat);
   const lon = Number(data.coord.lon);
   const location = data.name || "Selected location";
-  let status = {};
   try {
-    status = await fetchJson(`${apiBase}/status`);
+    mapStatus = await fetchJson(`${apiBase}/status`);
   } catch (error) {
     console.warn("Map provider status unavailable:", error);
+    mapStatus = {};
   }
-  mapLayerProviderReady = Boolean(status.mapTilesEnabled);
-  document.querySelectorAll(".map-mode").forEach(button => {
-    const unavailable = button.dataset.mapMode !== "satellite" && !mapLayerProviderReady;
-    button.disabled = unavailable;
-    button.setAttribute("aria-disabled", String(unavailable));
-    button.title = unavailable ? "Weather map provider is not configured." : "";
-  });
-  if (!mapLayerProviderReady && mapMode !== "satellite") mapMode = "satellite";
+  const radarButton = document.querySelector('[data-map-mode="rain"]');
+  if (radarButton) {
+    radarButton.disabled = !mapStatus.radarEnabled;
+    radarButton.title = mapStatus.radarEnabled ? "" : "Disabled: RainViewer's free API does not permit ad-supported commercial use.";
+  }
 
   if (!weatherMap) {
     const mapElement = document.getElementById("map");
     mapElement.innerHTML = "";
-    weatherMap = L.map(mapElement).setView([lat, lon], 9);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { attribution: "&copy; OpenStreetMap contributors" }).addTo(weatherMap);
-    mapLayers = {
-      temperature: configureMapLayer(L.tileLayer(mapApiPath("temp_new"), { opacity: 0.58 }), "temperature"),
-      rain: configureMapLayer(L.tileLayer(mapApiPath("precipitation_new"), { opacity: 0.62 }), "rain"),
-      clouds: configureMapLayer(L.tileLayer(mapApiPath("clouds_new"), { opacity: 0.55 }), "clouds"),
-      humidity: configureMapLayer(L.tileLayer(mapApiPath("humidity_new"), { opacity: 0.55 }), "humidity"),
-      pressure: configureMapLayer(L.tileLayer(mapApiPath("pressure_new"), { opacity: 0.55 }), "pressure"),
-      wind: configureMapLayer(L.tileLayer(mapApiPath("wind_new"), { opacity: 0.58 }), "wind"),
-      satellite: configureMapLayer(L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { attribution: "&copy; Esri", opacity: 0.88 }), "satellite")
-    };
-    mapLayers[mapMode].addTo(weatherMap);
-    setMapOpacity(document.getElementById("mapOpacity")?.value || 60);
-    const addMapControl = (id, className, position) => {
-      const control = L.control({ position });
-      control.onAdd = () => {
-        const element = document.createElement("div");
-        element.id = id;
-        element.className = className;
-        if (id === "mapLayerMessage") element.hidden = true;
-        return element;
-      };
-      control.addTo(weatherMap);
-    };
+    weatherMap = L.map(mapElement, { worldCopyJump: true }).setView([lat, lon], 7);
+    setupMapLayers();
     addMapControl("mapCityCard", "map-city-card", "topleft");
     addMapControl("mapLegend", "map-legend", "bottomright");
     addMapControl("mapLayerMessage", "map-layer-message", "topright");
-    updateMapLegend();
-    document.querySelectorAll(".map-mode").forEach(button => {
-      const active = button.dataset.mapMode === mapMode;
-      button.classList.toggle("active", active);
-      button.setAttribute("aria-pressed", String(active));
+    weatherMap.on("moveend", () => {
+      clearTimeout(mapDebounceTimer);
+      mapDebounceTimer = setTimeout(() => {
+        if (mapMode === "rain") {
+          const center = weatherMap.getCenter();
+          loadRadarLayer(center.lat, center.lng);
+        } else {
+          refreshMapWeatherData();
+        }
+      }, 350);
     });
-    if (!mapLayerProviderReady) updateMapMessage("Weather overlays are unavailable until a tile provider is configured. Satellite imagery remains available.");
-    clearInterval(mapRefreshIntervals.radar);
-    clearInterval(mapRefreshIntervals.weather);
-    mapRefreshIntervals.radar = setInterval(() => refreshMapLayer("rain"), 300000);
-    mapRefreshIntervals.weather = setInterval(() => Object.keys(mapLayers).filter(mode => mode !== "rain" && mode !== "satellite").forEach(refreshMapLayer), 600000);
+    mapRefreshTimer = setInterval(() => {
+      if (mapMode === "rain") {
+        radarMetadata = null;
+        const center = weatherMap.getCenter();
+        loadRadarLayer(center.lat, center.lng);
+      } else if (mapMode === "satellite") {
+        updateSatelliteLayer();
+        document.getElementById("radarTimestamp").textContent = `NASA MODIS Terra daily imagery · ${mapLayers.satelliteDate}`;
+        document.getElementById("mapLastUpdated").textContent = `Imagery date ${mapLayers.satelliteDate} (daily product)`;
+      } else {
+        refreshMapWeatherData();
+      }
+    }, 300_000);
   } else {
     weatherMap.setView([lat, lon], weatherMap.getZoom());
   }
@@ -1600,36 +1875,214 @@ async function renderMap(data) {
   updateMapInfo(data);
   if (mapMarker) mapMarker.setLatLng([lat, lon]).setPopupContent(escapeHtml(location));
   else mapMarker = L.marker([lat, lon]).addTo(weatherMap).bindPopup(escapeHtml(location)).openPopup();
+  document.querySelectorAll(".map-mode").forEach(button => {
+    const active = button.dataset.mapMode === mapMode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  updateMapLegend();
+  updateMapSource();
+  if (mapMode === "rain") await loadRadarLayer(lat, lon);
+  else if (mapMode !== "satellite") await refreshMapWeatherData();
   setTimeout(() => weatherMap.invalidateSize(), 400);
 }
 
-function setMapMode(mode, button) {
-  if (mode !== "satellite" && !mapLayerProviderReady) {
-    updateMapMessage("This weather overlay is unavailable because a compatible map tile provider is not configured.");
+function updateTimelineControls() {
+  const slider = document.getElementById("radarFrameSlider");
+  const hasFrames = radarFrames.length > 0 && mapStatus.radarEnabled;
+  const hasAnimation = radarFrames.length > 1 && mapStatus.radarEnabled;
+  const current = mapState?.frameIndex ?? -1;
+  if (slider) {
+    slider.min = "0";
+    slider.max = String(Math.max(0, radarFrames.length - 1));
+    slider.value = String(Math.max(0, current));
+    slider.disabled = !hasFrames;
+  }
+  for (const id of ["radarPrevious", "radarNext"]) {
+    const button = document.getElementById(id);
+    if (button) button.disabled = !hasAnimation;
+  }
+  const play = document.getElementById("radarPlay");
+  if (play) {
+    play.disabled = !hasAnimation;
+    play.setAttribute("aria-label", mapState?.playing ? "Pause radar animation" : "Play radar animation");
+    play.innerHTML = `<i class="fas fa-${mapState?.playing ? "pause" : "play"}"></i>`;
+  }
+}
+
+function normalizedTileCoordinate(latitude, longitude, zoom) {
+  const scale = 2 ** zoom;
+  const x = (longitude + 180) / 360 * scale;
+  const sinLatitude = Math.sin(Math.max(-85.05112878, Math.min(85.05112878, latitude)) * Math.PI / 180);
+  const y = (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * scale;
+  return {
+    z: zoom,
+    x: Math.floor(x) % scale,
+    y: Math.max(0, Math.min(scale - 1, Math.floor(y))),
+    pixelX: Math.floor((x - Math.floor(x)) * 256),
+    pixelY: Math.floor((y - Math.floor(y)) * 256)
+  };
+}
+
+async function isRadarCovered(latitude, longitude) {
+  const tile = normalizedTileCoordinate(latitude, longitude, 7);
+  const cacheKey = `${tile.z}/${tile.x}/${tile.y}/${tile.pixelX}/${tile.pixelY}`;
+  const cached = mapDataCache.get(`coverage:${cacheKey}`);
+  if (cached && cached.expiresAt > Date.now()) return cached.covered;
+  const response = await fetch(`${apiBase}/radar/coverage/${tile.z}/${tile.x}/${tile.y}.png`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.message || "Radar coverage could not be checked.");
+  }
+  const image = await createImageBitmap(await response.blob());
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = 256;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.drawImage(image, 0, 0);
+  image.close();
+  const covered = context.getImageData(tile.pixelX, tile.pixelY, 1, 1).data[3] === 0;
+  mapDataCache.set(`coverage:${cacheKey}`, { covered, expiresAt: Date.now() + 86_400_000 });
+  return covered;
+}
+
+async function loadRadarLayer(latitude, longitude) {
+  if (!mapStatus.radarEnabled) {
+    updateMapMessage("Radar is disabled: RainViewer’s free API terms do not permit ad-supported commercial use. Obtain commercial permission before enabling observed radar.");
     return;
   }
-  if (!weatherMap || !mapLayers[mode]) {
-    updateMapMessage("Search a location before selecting a weather layer.");
+  updateMapMessage("Loading RainViewer radar metadata and checking local coverage…");
+  try {
+    if (!radarMetadata) radarMetadata = await fetchJson(`${apiBase}/radar/metadata`);
+    radarFrames = mapState.setFrames(radarMetadata.frames);
+    updateTimelineControls();
+    if (!radarFrames.length) {
+      updateMapMessage("RainViewer has no historical radar frames available right now.");
+      return;
+    }
+    if (!(await isRadarCovered(latitude, longitude))) {
+      updateMapMessage("Radar coverage is not available at this location. RainViewer coverage varies by country; its tile service is limited to zoom level 7.");
+      return;
+    }
+    displayRadarFrame(mapState.frameIndex);
+  } catch (error) {
+    console.error("RainViewer radar request failed:", error);
+    updateMapMessage(error.message);
+  }
+}
+
+function displayRadarFrame(index) {
+  const frame = mapState.setFrameIndex(index);
+  if (!frame || !radarMetadata || mapMode !== "rain") return;
+  const tileUrl = mapTools.radarTileUrl(radarMetadata.host, frame);
+  if (mapLayers.rain) {
+    mapLayers.rain.setUrl(tileUrl);
+    mapLayers.rain.setOpacity(mapState.opacity);
+    if (!weatherMap.hasLayer(mapLayers.rain)) mapLayers.rain.addTo(weatherMap);
+  } else {
+    mapLayers.rain = L.tileLayer(tileUrl, {
+      maxNativeZoom: 7, maxZoom: 12, opacity: mapState.opacity,
+      attribution: '<a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>'
+    }).addTo(weatherMap);
+    mapLayers.rain.on("tileerror", () => {
+      if (mapMode === "rain") updateMapMessage("RainViewer radar tiles could not be loaded. Coverage and availability vary by region.");
+    });
+    mapLayers.rain.on("load", () => {
+      if (mapMode === "rain") updateMapMessage();
+    });
+  }
+  const timestamp = new Date(frame.time * 1000);
+  document.getElementById("radarTimestamp").textContent = `RainViewer observed radar · ${timestamp.toLocaleString()} (local time)`;
+  document.getElementById("mapLastUpdated").textContent = `Metadata generated ${new Date(radarMetadata.generated * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  document.getElementById("mapSourceNote").innerHTML = 'Observed composite radar reflectivity · tile zoom limited to 7 · <a href="https://www.rainviewer.com/" target="_blank" rel="noopener noreferrer">RainViewer</a>. Historical frames only; no forecast frames are shown.';
+  updateTimelineControls();
+}
+
+function stepRadarFrame(direction) {
+  if (!mapState?.frames.length || mapMode !== "rain") return;
+  const frame = mapState.stepFrame(direction);
+  displayRadarFrame(mapState.frameIndex);
+  return frame;
+}
+
+function selectRadarFrame(index) {
+  if (mapMode === "rain") displayRadarFrame(index);
+}
+
+function toggleRadarPlayback() {
+  if (!mapState?.frames.length || mapMode !== "rain") return;
+  const shouldPlay = !mapState.playing;
+  mapState.setPlaying(shouldPlay);
+  clearInterval(radarPlaybackTimer);
+  if (shouldPlay) {
+    const speed = Number(document.getElementById("radarSpeed").value) || 600;
+    radarPlaybackTimer = setInterval(() => stepRadarFrame(1), speed);
+  }
+  updateTimelineControls();
+}
+
+function setRadarPlaybackSpeed() {
+  if (mapState?.playing) {
+    mapState.setPlaying(false);
+    toggleRadarPlayback();
+  }
+}
+
+async function setMapMode(mode, button) {
+  await mapToolsReady;
+  if (!mapTools.MAP_LAYER_DEFINITIONS[mode]) return;
+  if (!weatherMap) {
+    updateMapMessage("Search for a location before selecting a weather layer.");
     return;
   }
-  if (mapLayers[mapMode]) weatherMap.removeLayer(mapLayers[mapMode]);
+  if (mode === "rain" && !mapStatus.radarEnabled) {
+    updateMapMessage("Radar is disabled until commercial use of the RainViewer API is permitted for this ad-supported site.");
+    return;
+  }
+  clearInterval(radarPlaybackTimer);
+  mapState.setPlaying(false);
+  if (mapLayers[mapMode] && weatherMap.hasLayer(mapLayers[mapMode])) weatherMap.removeLayer(mapLayers[mapMode]);
+  mapState.setOverlay(mode);
   mapMode = mode;
-  mapLayers[mapMode].addTo(weatherMap);
   document.querySelectorAll(".map-mode").forEach(item => {
-    const active = item === button;
+    const active = item === button || item.dataset.mapMode === mode;
     item.classList.toggle("active", active);
     item.setAttribute("aria-pressed", String(active));
   });
-  document.getElementById("radarTimestamp").textContent = `${mapLayerDefinitions[mode].title} · refreshes every ${mode === "rain" ? 5 : 10} min`;
   updateMapLegend();
-  updateMapMessage(`Loading ${mapLayerDefinitions[mode].title.toLowerCase()} layer...`);
+  updateMapSource();
+  updateTimelineControls();
+  if (mode === "satellite") {
+    updateSatelliteLayer();
+    mapLayers.satellite.addTo(weatherMap);
+    document.getElementById("radarTimestamp").textContent = `NASA MODIS Terra daily imagery · ${mapLayers.satelliteDate}`;
+    document.getElementById("mapLastUpdated").textContent = `Imagery date ${mapLayers.satelliteDate} (daily product)`;
+    updateMapMessage();
+  } else if (mode === "rain") {
+    const location = latestWeatherData?.coord;
+    if (location) await loadRadarLayer(Number(location.lat), Number(location.lon));
+  } else {
+    updateMapMessage(`Loading ${mapTools.MAP_LAYER_DEFINITIONS[mode].title.toLowerCase()} model data…`);
+    if (mapWeatherData) renderWeatherMapOverlay();
+    else await refreshMapWeatherData();
+  }
+}
+
+function setMapBasemap(value) {
+  if (!weatherMap || !baseMapLayers[value]) return;
+  mapState.setBasemap(value);
+  Object.values(baseMapLayers).forEach(layer => {
+    if (weatherMap.hasLayer(layer)) weatherMap.removeLayer(layer);
+  });
+  baseMapLayers[value].addTo(weatherMap);
 }
 
 function setMapOpacity(value) {
   const opacity = Math.min(100, Math.max(10, Number(value))) / 100;
+  mapState?.setOpacity(opacity);
   const output = document.getElementById("mapOpacityValue");
   if (output) output.value = `${Math.round(opacity * 100)}%`;
-  Object.values(mapLayers).forEach(layer => layer.setOpacity(opacity));
+  const activeLayer = mapLayers[mapMode];
+  if (activeLayer?.setOpacity) activeLayer.setOpacity(opacity);
 }
 
 function renderNotifications() {
