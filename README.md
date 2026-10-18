@@ -44,6 +44,7 @@ skycast/
 ├── js/
 │   ├── script.js       # Core UI logic and same-origin API calls
 │   └── core/
+│       ├── alerts.js      # Runtime-neutral official alert processing
 │       └── weather-map.js # Map layer state and radar frame utilities
 ├── functions/
 │   └── api/            # Cloudflare Pages Functions; provider keys stay server-side
@@ -51,7 +52,8 @@ skycast/
 │   └── build.mjs       # Static Pages output and build-time SEO URL configuration
 ├── server/
 │   ├── index.js        # Static server and weather proxy routes
-│   └── config.js       # Server-only environment configuration
+│   ├── config.js       # Node server environment configuration
+│   └── alert-system.js # Node alert snapshot persistence
 ├── assets/             # Social preview, images and icons
 ├── LICENSE             # MIT License
 └── ads.txt             # AdSense verification

@@ -187,6 +187,48 @@ test("Cloudflare NOAA alerts handle out-of-coverage locations without failing", 
   }
 });
 
+test("Cloudflare NOAA alerts normalize and return official warnings", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("/points/")) {
+      return Response.json({ properties: { forecastZone: "CAZ041" } });
+    }
+    if (String(url).includes("/alerts/active")) {
+      return Response.json({
+        features: [{
+          properties: {
+            id: "https://api.weather.gov/alerts/123",
+            event: "Flood Warning",
+            severity: "Severe",
+            urgency: "Immediate",
+            areaDesc: "San Francisco",
+            effective: "2026-10-18T12:00:00Z",
+            expires: "2026-10-18T18:00:00Z",
+            senderName: "National Weather Service",
+            description: "Flooding is expected."
+          }
+        }]
+      });
+    }
+    return Response.json([]);
+  };
+  try {
+    const response = await routeApi({
+      request: request("/api/alerts?lat=37.8&lon=-122.4"),
+      env: {}
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(body.provider, "NOAA/NWS");
+    assert.equal(body.alerts.length, 1);
+    assert.equal(body.alerts[0].event, "Flood Warning");
+    assert.equal(body.alerts[0].area, "San Francisco");
+    assert.equal("snapshot" in body, false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test("Cloudflare weather map grid uses the commercial Open-Meteo endpoint without exposing its key", async () => {
   const originalFetch = globalThis.fetch;
   const secret = "test-only-open-meteo-secret";

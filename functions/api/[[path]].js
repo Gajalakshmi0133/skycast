@@ -1,5 +1,5 @@
 import { createHttpClient } from "../../js/core/http.js";
-import { collectAlertsForLocation, fetchImdDistrictWarnings } from "../../server/alert-system.js";
+import { collectAlertsForLocation, fetchImdDistrictWarnings } from "../../js/core/alerts.js";
 
 const weatherCodes = (code) => {
   if (code === 0) return ["Clear sky", "01d"];
