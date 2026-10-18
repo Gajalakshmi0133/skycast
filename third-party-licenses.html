@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f172a">
+  <title>Third-Party Licenses | SkyCast</title>
+  <meta name="description" content="Licenses, terms and notices for the data providers and open-source libraries used by SkyCast.">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="css/style.css?v=11">
+</head>
+<body class="policy-page">
+  <nav class="navbar navbar-expand-lg navbar-dark policy-nav" aria-label="Legal navigation">
+    <div class="container">
+      <a class="navbar-brand fw-bold" href="index.html"><i class="fas fa-cloud-meatball me-2" aria-hidden="true"></i>SkyCast</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#policyNav" aria-controls="policyNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="policyNav">
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item"><a class="nav-link" href="index.html">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="index.html#about">About</a></li>
+          <li class="nav-item"><a class="nav-link" href="privacy-policy.html">Privacy Policy</a></li>
+          <li class="nav-item"><a class="nav-link active" href="third-party-licenses.html" aria-current="page">Third-party licenses</a></li>
+        </ul>
+      </div>
+    </div>
+  </nav>
+
+  <main class="container policy-content">
+    <article class="weather-card policy-card">
+      <p class="section-kicker mb-2">Transparency</p>
+      <h1 class="mb-3">Third-Party Licenses and Notices</h1>
+      <p>SkyCast uses public data sources and open-source front-end libraries. This page summarizes the primary dependencies and their licensing terms. Review the upstream provider terms for any commercial or production deployment.</p>
+
+      <h2>Data providers</h2>
+      <ul>
+        <li><strong>Open-Meteo</strong>
+          <ul>
+            <li>Terms: <a href="https://open-meteo.com/en/terms" rel="noopener noreferrer">open-meteo.com/en/terms</a></li>
+            <li>Weather-map data is model-derived and distributed under CC BY 4.0, with credit shown in the map interface.</li>
+            <li>The free API is non-commercial only. SkyCast's ad-supported deployment must use an Open-Meteo customer API subscription for weather-map data.</li>
+          </ul>
+        </li>
+        <li><strong>GNews</strong>
+          <ul>
+            <li>Terms: <a href="https://gnews.io/terms" rel="noopener noreferrer">gnews.io/terms</a></li>
+            <li>Used through the server-side proxy for filtered English weather, environmental, climate and science headlines.</li>
+          </ul>
+        </li>
+        <li><strong>OpenStreetMap</strong>
+          <ul>
+            <li>License: Open Database License (ODbL) / CC BY-SA for map tiles and contributions.</li>
+            <li>Street basemap service; attribution is displayed on the map.</li>
+          </ul>
+        </li>
+        <li><strong>Esri ArcGIS World Imagery</strong>
+          <ul>
+            <li>Terms: <a href="https://www.esri.com/en-us/legal/terms" rel="noopener noreferrer">esri.com/en-us/legal/terms</a></li>
+            <li>Used for selectable terrain and satellite basemaps and subject to Esri service terms.</li>
+          </ul>
+        </li>
+        <li><strong>NASA Global Imagery Browse Services (GIBS)</strong>
+          <ul>
+            <li>Documentation: <a href="https://nasa-gibs.github.io/gibs-api-docs/" rel="noopener noreferrer">nasa-gibs.github.io/gibs-api-docs</a></li>
+            <li>Provides MODIS Terra corrected true-color satellite imagery. Daily imagery is delayed and is not a live geostationary cloud product.</li>
+            <li>NASA requests this acknowledgment: “We acknowledge the use of imagery provided by services from NASA's Global Imagery Browse Services (GIBS), part of NASA's Earth Science Data and Information System (ESDIS).”</li>
+          </ul>
+        </li>
+        <li><strong>RainViewer Weather Radar API</strong>
+          <ul>
+            <li>API terms: <a href="https://www.rainviewer.com/api.html" rel="noopener noreferrer">rainviewer.com/api.html</a></li>
+            <li>The public API is for personal and educational use only. It is disabled by default because SkyCast is ad-supported.</li>
+            <li>Do not enable unless RainViewer grants permission covering the intended commercial deployment. When authorized, the map links to RainViewer and displays its attribution.</li>
+          </ul>
+        </li>
+      </ul>
+
+      <h2>Front-end libraries</h2>
+      <ul>
+        <li><strong>Bootstrap 5</strong> — MIT License. <a href="https://getbootstrap.com/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Chart.js</strong> — MIT License. <a href="https://www.chartjs.org/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Leaflet</strong> — BSD 2-Clause License. <a href="https://leafletjs.com/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Font Awesome</strong> — Icons are subject to the Font Awesome Free license. <a href="https://fontawesome.com/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Animate.css</strong> — MIT License. <a href="https://animate.style/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Skycons</strong> — MIT License. <a href="https://darkskyapp.github.io/skycons/" rel="noopener noreferrer">Project page</a></li>
+        <li><strong>Google Fonts</strong> — SIL Open Font License 1.1 for the provided font files. <a href="https://fonts.google.com/" rel="noopener noreferrer">Project page</a></li>
+      </ul>
+
+      <h2>Project license</h2>
+      <p>SkyCast is distributed under the MIT License. See <a href="LICENSE">LICENSE</a> for the full text.</p>
+    </article>
+  </main>
+
+  <footer class="policy-footer">
+    <div class="container d-flex flex-wrap justify-content-between gap-2">
+      <span>&copy; 2026 SkyCast · Developer: Gajalakshmi</span>
+      <nav aria-label="Footer links">
+        <a href="index.html">Home</a>
+        <a href="index.html#about">About</a>
+        <a href="privacy-policy.html">Privacy</a>
+        <a href="third-party-licenses.html" aria-current="page">Third-party licenses</a>
+      </nav>
+    </div>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

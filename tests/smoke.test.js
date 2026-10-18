@@ -105,6 +105,7 @@ test('server responds with expected status and homepage', async () => {
 
     const homeResponse = await fetch(`http://127.0.0.1:${port}/`);
     assert.equal(homeResponse.status, 200, 'Home page should return 200');
+    assert.match(homeResponse.headers.get('permissions-policy'), /microphone=\(self\)/);
     const html = await homeResponse.text();
     assert.match(html, /SkyCast/i, 'Home page should include the SkyCast app shell');
     assert.match(html, /style\.css\?v=11/);
@@ -146,6 +147,13 @@ test('server responds with expected status and homepage', async () => {
     assert.match(privacyHtml, /class="policy-page"/);
     assert.match(privacyHtml, /Google AdSense loader/);
     assert.match(privacyHtml, /Owner action required/);
+
+    const licensesResponse = await fetch(`http://127.0.0.1:${port}/third-party-licenses.html`);
+    assert.equal(licensesResponse.status, 200, 'Third-party licenses page should be served');
+    const licensesHtml = await licensesResponse.text();
+    assert.match(licensesHtml, /Third-Party Licenses and Notices/);
+    assert.match(licensesHtml, /class="policy-page"/);
+    assert.match(licensesHtml, /NASA Global Imagery Browse Services/);
 
     const notFoundResponse = await fetch(`http://127.0.0.1:${port}/unknown-page`);
     assert.equal(notFoundResponse.status, 404);
