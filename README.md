@@ -144,6 +144,19 @@ privacy contact, legal controller details, hosting-log retention period, and
 the active Google AdSense/consent settings. No analytics integration is
 currently included in the application code.
 
+### Ad placements
+
+The weather dashboard uses the responsive horizontal slots `6405613516` and
+`8270685252`, the desktop-only right rail `3227996156`, and the Multiplex slot
+`5087872730`. The privacy and third-party license pages use the horizontal
+slot; the 404 page does not load ads. `js/ads.js` loads the existing publisher
+script once and queues each visible manual unit once. For a new eligible HTML
+page, include the existing publisher meta tag, generated `<ins>` markup, and
+`<script src="js/ads.js" defer></script>`; do not add another publisher loader
+or inline `adsbygoogle.push()` call. Auto ads, if desired, must be configured
+separately in the AdSense account, with placements reviewed to avoid excess
+ad density.
+
 ### Deploy to Cloudflare Pages
 
 SkyCast is a static HTML/CSS/JavaScript application with server-side API

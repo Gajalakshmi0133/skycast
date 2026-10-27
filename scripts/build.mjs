@@ -24,6 +24,7 @@ const required = [
   'assets/social-preview.svg',
   'css/style.css',
   'js/script.js',
+  'js/ads.js',
   '_headers',
   'sw.js'
 ];

@@ -108,7 +108,7 @@ test('server responds with expected status and homepage', async () => {
     assert.match(homeResponse.headers.get('permissions-policy'), /microphone=\(self\)/);
     const html = await homeResponse.text();
     assert.match(html, /SkyCast/i, 'Home page should include the SkyCast app shell');
-    assert.match(html, /style\.css\?v=11/);
+    assert.match(html, /style\.css\?v=13/);
     assert.match(html, /script\.js\?v=13/);
     assert.match(html, /name="skycast-version" content="2\.0\.0"/);
     assert.match(html, /assets\/favicon\.svg/);
@@ -126,6 +126,26 @@ test('server responds with expected status and homepage', async () => {
     assert.match(html, /id="mapBasemap"/);
     assert.match(html, /data-map-mode="precipitation"/);
     assert.match(html, /id="radarFrameSlider"/);
+    assert.equal((html.match(/adsbygoogle\.js/g) || []).length, 0, 'Shared ad initializer should manage one AdSense loader');
+    assert.equal((html.match(/src="js\/ads\.js"/g) || []).length, 1, 'Homepage should load the shared ad initializer once');
+    for (const slot of ['6405613516', '8270685252', '5087872730', '3227996156']) {
+      assert.equal((html.match(new RegExp(`data-ad-slot="${slot}"`, 'g')) || []).length, 1, `Ad slot ${slot} should appear once`);
+    }
+    assert.match(html, /data-ad-format="autorelaxed"/);
+
+    for (const page of ['privacy-policy.html', 'third-party-licenses.html']) {
+      const pageResponse = await fetch(`http://127.0.0.1:${port}/${page}`);
+      assert.equal(pageResponse.status, 200);
+      const pageHtml = await pageResponse.text();
+      assert.equal((pageHtml.match(/src="js\/ads\.js"/g) || []).length, 1, `${page} should load the shared ad initializer once`);
+      assert.equal((pageHtml.match(/data-ad-slot="6405613516"/g) || []).length, 1, `${page} should include the shared horizontal slot once`);
+    }
+
+    const adsScriptResponse = await fetch(`http://127.0.0.1:${port}/js/ads.js`);
+    assert.equal(adsScriptResponse.status, 200, 'Shared ad initializer should be served');
+    const adsScript = await adsScriptResponse.text();
+    assert.match(adsScript, /adsbygoogle\.js\?client=/);
+    assert.match(adsScript, /slot\.dataset\.adsRequested === "true"/);
 
     const scriptResponse = await fetch(`http://127.0.0.1:${port}/js/script.js`);
     const script = await scriptResponse.text();
@@ -158,6 +178,9 @@ test('server responds with expected status and homepage', async () => {
     const notFoundResponse = await fetch(`http://127.0.0.1:${port}/unknown-page`);
     assert.equal(notFoundResponse.status, 404);
     assert.match(notFoundResponse.headers.get('content-type'), /text\/html/);
-    assert.match(await notFoundResponse.text(), /We can't find that page/);
+    const notFoundHtml = await notFoundResponse.text();
+    assert.match(notFoundHtml, /We can't find that page/);
+    assert.match(notFoundHtml, /style\.css\?v=13/);
+    assert.doesNotMatch(notFoundHtml, /adsbygoogle|data-ad-slot=/, 'Not-found pages should not load ads');
   });
 });

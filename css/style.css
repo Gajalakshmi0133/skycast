@@ -2658,6 +2658,74 @@ body {
   scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
 }
 
+.content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  gap: 1.5rem;
+}
+
+.content-layout > .content-scroll {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.ad-placement {
+  display: block;
+  width: 100%;
+  margin: 0 0 1.5rem;
+  min-width: 0;
+}
+
+.ad-placement-horizontal {
+  min-height: 6rem;
+}
+
+.ad-placement-native {
+  margin: 2rem 0 0;
+  min-height: 15rem;
+}
+
+.ad-sidebar {
+  display: none;
+}
+
+.ad-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (min-width: 1440px) {
+  .content-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+
+  .ad-sidebar {
+    display: block;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: start;
+    position: sticky;
+    top: 1rem;
+    min-width: 0;
+    min-height: 18rem;
+    padding-top: 1rem;
+  }
+}
+
+@media (max-width: 575px) {
+  .ad-placement-horizontal {
+    min-height: 5rem;
+  }
+}
+
 .content-scroll > *,
 .page-section > *,
 .weather-card,
